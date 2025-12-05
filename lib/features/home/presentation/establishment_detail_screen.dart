@@ -17,7 +17,6 @@ import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_prov
 
 // WIDGETS Y REPOS
 import 'package:torre_del_mar_app/features/scan/presentation/widgets/star_rating_selector.dart';
-import 'package:torre_del_mar_app/features/scan/data/repositories/passport_repository.dart';
 
 class EstablishmentDetailScreen extends ConsumerWidget {
   final EstablishmentModel establishment;
