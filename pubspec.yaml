@@ -31,14 +31,17 @@ dependencies:
   flutter:
     sdk: flutter
 
-    # MIS DEPENDENCIAS AÑADIDAS:
+  # Graficos:
+  fl_chart: ^1.1.1
+
+  # MIS DEPENDENCIAS AÑADIDAS:
   flutter_dotenv: ^5.1.0
   dio: ^5.4.0                 # Para descargas potentes
   dio_cache_interceptor: ^3.5.0
   flutter_map_cache: ^1.5.0   # <--- LA CLAVE PARA EL MAPA OFFLINE  
-  intl: ^0.19.0
+  intl: ^0.20.2
   
-# Gestión de Estado y Arquitectura
+  # Gestión de Estado y Arquitectura
   flutter_riverpod: ^2.5.1
   riverpod_annotation: ^2.3.5
   
@@ -47,7 +50,7 @@ dependencies:
   json_annotation: ^4.9.0
   freezed_annotation: ^2.4.1
   equatable: ^2.0.5
-  http: ^1.2.1                  #<---| AÑADIDO Para pedir datos a la API de Google Places manualmente
+  http: ^1.6.0                  #<---| AÑADIDO Para pedir datos a la API de Google Places manualmente
   connectivity_plus: ^6.0.3     #<---| AÑADIDO Para detectar si hay WiFi - 5G/4G
   internet_connection_checker: ^1.0.0+1   #<---| AÑADIDO Verificación real de ping
 
@@ -58,13 +61,13 @@ dependencies:
   
   # UI & Navegación
   go_router: ^14.0.0
-  google_fonts: ^6.2.1
-  cached_network_image: ^3.3.1
+  google_fonts: ^6.3.3
+  cached_network_image: ^3.4.1
   flutter_svg: ^2.0.10
   qr_flutter: ^4.1.0
   mobile_scanner: ^5.0.0
   # barcode_scan2: ^4.3.0
-  uuid: ^4.4.0
+  uuid: ^4.5.2
   
   # Funcionalidades Core
   # google_maps_flutter: ^2.6.0 <---| ELIMINADO (No usaremos el SDK visual de Google Map)
@@ -79,6 +82,12 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  image_picker: ^1.2.1
+  window_manager: ^0.5.1
+  mime: ^2.0.0
+  font_awesome_flutter: ^10.12.0
+  html: ^0.15.6
+  dropdown_search: ^6.0.2
 
 dev_dependencies:
   flutter_test:

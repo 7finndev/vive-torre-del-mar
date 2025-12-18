@@ -1,18 +1,27 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:torre_del_mar_app/features/auth/data/repositories/auth_repository.dart';
+import '../../data/datasources/auth_service.dart';
+import '../../data/repositories/auth_repository.dart';
 
 part 'auth_provider.g.dart';
 
-// 1. Proveedor del Repositorio
+// 1. Proveedor del Servicio
 @riverpod
-AuthRepository authRepository(AuthRepositoryRef ref) {
-  return AuthRepository(Supabase.instance.client);
+AuthService authService(AuthServiceRef ref) {
+  return AuthService(Supabase.instance.client);
 }
 
-// 2. Proveedor del Usuario Actual (Stream)
-// Este provider nos dirá en tiempo real si hay usuario o no
+// 2. Proveedor del Repositorio
+@riverpod
+AuthRepository authRepository(AuthRepositoryRef ref) {
+  final service = ref.watch(authServiceProvider);
+  return AuthRepository(service);
+}
+
+// 3. Proveedor del Usuario Actual (Stream)
+// Esto permitirá que la UI reaccione automáticamente si el usuario entra o sale
 @riverpod
 Stream<User?> authState(AuthStateRef ref) {
-  return ref.watch(authRepositoryProvider).authStateChanges.map((event) => event.session?.user);
+  final repo = ref.watch(authRepositoryProvider);
+  return repo.authStateChanges.map((event) => event.session?.user);
 }

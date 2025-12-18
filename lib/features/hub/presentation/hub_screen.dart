@@ -1,139 +1,815 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hive/hive.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
-import 'package:torre_del_mar_app/features/home/data/models/event_model.dart'; 
+import 'package:torre_del_mar_app/features/scan/presentation/providers/passport_provider.dart';
+import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-// --- WIDGET TARJETA DE EVENTO (ADAPTABLE) ---
-class HubEventCard extends StatelessWidget {
-  final Map<String, dynamic> event;
-  const HubEventCard({super.key, required this.event});
+// TUS IMPORTS
+import 'package:torre_del_mar_app/core/constants/app_data.dart';
+import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
+import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:torre_del_mar_app/features/home/data/repositories/event_repository.dart';
+import 'package:torre_del_mar_app/features/home/presentation/widgets/sponsor_logo.dart';
+import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
+import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
+import 'package:torre_del_mar_app/features/hub/data/news_service.dart';
+
+class HubScreen extends ConsumerStatefulWidget {
+  const HubScreen({super.key});
+
+  @override
+  ConsumerState<HubScreen> createState() => _HubScreenState();
+}
+
+class _HubScreenState extends ConsumerState<HubScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  // Función para recargar datos al deslizar
+  Future<void> _refreshData() async {
+    ref.invalidate(adminEventsListProvider);
+    ref.invalidate(newsProvider);
+    await Future.delayed(const Duration(milliseconds: 800));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final String imageUrl = event['bg_image_url'] ?? 'https://images.pexels.com/photos/1267320/pexels-photo-1267320.jpeg?auto=compress&cs=tinysrgb&w=600';
-    final String name = event['name'] ?? 'Evento';
-    final String type = (event['type'] ?? '').toString().toUpperCase();
-    final String status = event['status'] ?? 'unknown';
-    final String colorHex = event['theme_color_hex'] ?? '#FF9800';
+    // 1. LEER ESTADOS
+    final selectedFilter = ref.watch(hubFilterProvider);
+    final eventsAsync = ref.watch(adminEventsListProvider);
+    // authState ya no se usa aquí en el build principal, solo en el Drawer
 
-    Color themeColor;
-    try {
-      themeColor = Color(int.parse(colorHex.replaceAll('#', '0xff')));
-    } catch (_) {
-      themeColor = Colors.orange;
-    }
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: Colors.grey[50],
 
-    String statusText;
-    IconData statusIcon;
-    Color badgeColor;
-    Color itemsColor;
+      // --- A. MENÚ LATERAL ---
+      endDrawer: const _HubSideMenu(),
 
-    switch (status) {
-      case 'active':
-        statusText = "EN CURSO";
-        statusIcon = Icons.fiber_manual_record;
-        badgeColor = Colors.white;
-        itemsColor = Colors.green[700]!;
-        break;
-      case 'upcoming':
-        statusText = "PRÓXIMAMENTE";
-        statusIcon = Icons.calendar_today;
-        badgeColor = Colors.white;
-        itemsColor = Colors.blue[700]!;
-        break;
-      case 'archived':
-      default:
-        statusText = "FINALIZADO";
-        statusIcon = Icons.flag;
-        badgeColor = Colors.black54;
-        itemsColor = Colors.white;
-        break;
-    }
+      // --- PULL TO REFRESH ---
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        color: Colors.blue[900],
+        backgroundColor: Colors.white,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // --- B. CABECERA (LIMPIA) ---
+            SliverAppBar(
+              title: const Text(
+                "VIVE TORRE DEL MAR",
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                  color: Colors.black,
+                ),
+              ),
+              backgroundColor: Colors.white,
+              floating: true,
+              pinned: true,
+              elevation: 0,
+              centerTitle: false,
+              actions: [
+                // HEMOS ELIMINADO EL CIRCLE AVATAR DE AQUÍ
 
-    return GestureDetector(
-      onTap: () => context.go('/event/${event['id']}'),
-      child: Container(
-        // NOTA: Quitamos el margen inferior y la altura fija.
-        // Dejamos que el Grid controle el tamaño.
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          color: Colors.black, 
-          image: DecorationImage(
-            image: CachedNetworkImageProvider(imageUrl),
-            fit: BoxFit.cover,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3), 
-              blurRadius: 15, 
-              offset: const Offset(0, 8)
-            )
+                // Botón Menú Hamburguesa
+                IconButton(
+                  icon: const Icon(Icons.menu, color: Colors.black, size: 28),
+                  onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                ),
+                const SizedBox(width: 12), // Un poco de margen a la derecha
+              ],
+            ),
+
+            // --- C. CARRUSEL DE NOTICIAS ---
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "ÚLTIMAS NOTICIAS",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => launchUrl(
+                            Uri.parse("https://www.torredelmar.org/eventos/"),
+                          ),
+                          child: Text(
+                            "Ver web >",
+                            style: TextStyle(
+                              color: Colors.blue[800],
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const _NewsCarouselSection(),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+
+            // --- D. FILTROS ---
+            SliverToBoxAdapter(
+              child: Container(
+                color: Colors.transparent,
+                padding: const EdgeInsets.only(bottom: 12),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      _FilterChip(
+                        label: "🔥 Activos",
+                        isSelected: selectedFilter == 'active',
+                        onTap: () =>
+                            ref.read(hubFilterProvider.notifier).state =
+                                'active',
+                      ),
+                      const SizedBox(width: 10),
+                      _FilterChip(
+                        label: "🔜 Próximos",
+                        isSelected: selectedFilter == 'upcoming',
+                        onTap: () =>
+                            ref.read(hubFilterProvider.notifier).state =
+                                'upcoming',
+                      ),
+                      const SizedBox(width: 10),
+                      _FilterChip(
+                        label: "📜 Historial",
+                        isSelected: selectedFilter == 'archived',
+                        onTap: () =>
+                            ref.read(hubFilterProvider.notifier).state =
+                                'archived',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // --- E. LISTA DE EVENTOS ---
+            eventsAsync.when(
+              loading: () => const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (err, _) =>
+                  SliverToBoxAdapter(child: Center(child: Text("Error: $err"))),
+              data: (events) {
+                final filteredEvents = events.where((e) {
+                  final status = e.status.toLowerCase().trim();
+                  if (selectedFilter == 'active') return status == 'active';
+                  if (selectedFilter == 'upcoming') return status == 'upcoming';
+                  if (selectedFilter == 'archived') {
+                    return status == 'archived' || status == 'finished';
+                  }
+                  return true;
+                }).toList();
+
+                if (filteredEvents.isEmpty) {
+                  return SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyState(filter: selectedFilter),
+                  );
+                }
+
+                return SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final event = filteredEvents[index];
+                      return _HubEventCard(event: event);
+                    }, childCount: filteredEvents.length),
+                  ),
+                );
+              },
+            ),
+
+            // --- F. COLABORADORES ---
+            const SliverToBoxAdapter(child: SizedBox(height: 30)),
+            const SliverToBoxAdapter(
+              child: Center(
+                child: Text(
+                  "COLABORADORES",
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 10)),
+
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 150,
+                  mainAxisExtent: 80,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  if (AppData.sponsors.isEmpty) return const SizedBox();
+                  final s = AppData.sponsors[index % AppData.sponsors.length];
+                  final String? url = s['url'];
+                  final String imageUrl = s['logo']!;
+
+                  return Material(
+                    color: Colors.white,
+                    elevation: 2,
+                    borderRadius: BorderRadius.circular(12),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: url != null && url.isNotEmpty
+                          ? () async {
+                              final uri = Uri.parse(url);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              }
+                            }
+                          : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Center(
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(
+                                  Icons.broken_image,
+                                  color: Colors.grey,
+                                ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }, childCount: AppData.sponsors.length),
+              ),
+            ),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 50)),
           ],
         ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            gradient: LinearGradient(
-              colors: [
-                Colors.black.withOpacity(0.9), 
-                Colors.black.withOpacity(0.5),
-                Colors.transparent             
+      ),
+    );
+  }
+}
+
+// --- WIDGETS AUXILIARES ---
+
+// 1. MENÚ LATERAL CON AVATAR
+class _HubSideMenu extends ConsumerWidget {
+  const _HubSideMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authStateProvider);
+    final user = authState.value;
+
+    String displayName = "Usuario";
+    String? avatarUrl;
+
+    if (user != null) {
+      final metadata = user.userMetadata;
+      if (metadata != null) {
+        // 1. Nombre
+        if (metadata.containsKey('name')) {
+          displayName = metadata['name'];
+        } else if (metadata.containsKey('full_name'))
+          displayName = metadata['full_name'];
+        else if (user.email != null)
+          displayName = user.email!.split('@')[0];
+
+        // 2. Avatar (CORRECCIÓN IMPORTANTE)
+        if (metadata.containsKey('avatar_url')) {
+          avatarUrl = metadata['avatar_url'];
+        }
+      }
+    }
+
+    return Drawer(
+      width: MediaQuery.of(context).size.width * 0.85,
+      child: Column(
+        children: [
+          // CABECERA USUARIO
+          Container(
+            padding: const EdgeInsets.only(
+              top: 60,
+              bottom: 20,
+              left: 20,
+              right: 20,
+            ),
+            width: double.infinity,
+            color: Colors.blue[900],
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/profile');
+                  },
+                  child: CircleAvatar(
+                    radius: 35,
+                    backgroundColor: Colors.white,
+                    // LÓGICA CORREGIDA: Usamos la URL de Supabase si existe
+                    backgroundImage: avatarUrl != null
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl == null
+                        ? Icon(Icons.person, size: 35, color: Colors.blue[900])
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                if (user != null) ...[
+                  Text(
+                    displayName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    user.email ?? "Sin email",
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.push('/profile');
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white54),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 0,
+                      ),
+                    ),
+                    child: const Text("Mi Perfil"),
+                  ),
+                ] else ...[
+                  const Text(
+                    "Bienvenido",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.push('/login');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.blue[900],
+                    ),
+                    child: const Text("Iniciar Sesión"),
+                  ),
+                ], // if-else
               ],
-              begin: Alignment.bottomCenter,
-              end: Alignment.center, 
             ),
           ),
-          padding: const EdgeInsets.all(20),
+
+          // LISTA DE ENLACES
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
+                  child: Text(
+                    "INFORMACIÓN",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                _MenuLink(
+                  icon: FontAwesomeIcons.globe,
+                  label: "Web Oficial ACET",
+                  url: "https://www.torredelmar.org/",
+                ),
+                _MenuLink(
+                  icon: FontAwesomeIcons.calendarDay,
+                  label: "Agenda de Eventos",
+                  url: "https://www.torredelmar.org/eventos",
+                ),
+
+                const Divider(),
+
+                // --- NUEVA SECCIÓN DE REDES SOCIALES EN FILA ---
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 10, 20, 10),
+                  child: Text(
+                    "SÍGUENOS",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 5,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment
+                        .spaceAround, // Distribuye el espacio uniformemente
+                    children: [
+                      _DrawerSocialBtn(
+                        icon: FontAwesomeIcons.facebook,
+                        color: const Color(0xFF1877F2), // Azul Facebook
+                        url:
+                            "https://www.facebook.com/acetempresariostorredelmar",
+                      ),
+                      _DrawerSocialBtn(
+                        icon: FontAwesomeIcons.instagram,
+                        color: const Color(0xFFE4405F),
+                        url:
+                            "https://www.instagram.com/acet_empresarios_torre_del_mar/?hl=es-la",
+                      ),
+                      _DrawerSocialBtn(
+                        icon: FontAwesomeIcons.xTwitter,
+                        color: Colors.black, // Negro X
+                        url: "http://www.twitter.com/acettorredelmar/",
+                      ),
+                      // Nota: Google+ cerró en 2019, pero si el enlace sigue activo para empresas o es Google My Business, lo dejamos.
+                      _DrawerSocialBtn(
+                        icon: FontAwesomeIcons
+                            .google, // Cambiado a Google genérico o MyBusiness
+                        color: const Color(0xFFDB4437), // Rojo Google
+                        url:
+                            "https://plus.google.com/114450006770310707428/posts",
+                      ),
+                    ],
+                  ),
+                ),
+
+                // -----------------------------------------------
+                const Divider(),
+
+                _MenuLink(
+                  icon: Icons.privacy_tip_outlined,
+                  label: "Contacto", // Corregido typo 'Conctacto'
+                  url: "https://www.torredelmar.org/contact/",
+                ),
+
+                if (user != null)
+                  ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.red),
+                    title: const Text(
+                      "Cerrar Sesión",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    onTap: () async {
+                      final repo = ref.read(passportRepositoryProvider);
+                      final syncService = ref.read(syncServiceProvider);
+                      final authRepo = ref.read(authRepositoryProvider);
+
+                      // 1. ¿HAY DATOS PENDIENTES?
+                      if (repo.hasPendingData) {
+                        // A. Intentamos sincronizar automáticamente primero (INTENTO SILENCIOSO)
+                        // Nota: Como syncPendingVotes pide un eventId, y aquí quizás no lo tenemos a mano si estamos en el Hub,
+                        // o hay múltiples eventos, lo más seguro es preguntar al usuario.
+
+                        // Mostramos Diálogo de Advertencia
+                        final bool? confirmDelete = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text("⚠️ Datos sin guardar"),
+                            content: const Text(
+                              "Tienes visados/votos que aún no se han subido a la nube.\n\n"
+                              "Si cierras sesión ahora, PERDERÁS esos datos para siempre.\n\n"
+                              "Te recomendamos cancelar, entrar en el evento y pulsar 'Sincronizar'.",
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(context, false), // Cancelar
+                                child: const Text("CANCELAR (RECOMENDADO)"),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(
+                                  context,
+                                  true,
+                                ), // Borrar y Salir
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text("PERDER DATOS Y SALIR"),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        // Si el usuario dice que NO (o toca fuera), cancelamos el logout
+                        if (confirmDelete != true) return;
+                      }
+
+                      // 2. PROCEDEMOS AL CIERRE (Si no había pendientes o el usuario aceptó borrarlos)
+
+                      // A. Borrado local
+                      await repo.clearLocalData();
+
+                      // B. Logout en Supabase
+                      await authRepo.signOut();
+
+                      // C. Cerrar pantalla/menú
+                      if (context.mounted) {
+                        // Si estamos en un Drawer (Hub)
+                        if (Navigator.canPop(context)) Navigator.pop(context);
+                        // Si estamos en ProfileScreen (que es una pantalla pusheada)
+                        // context.pop() o similar dependiendo de donde estés
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text(
+              "Vive Torre del Mar - v1.0.4",
+              style: TextStyle(color: Colors.grey[400], fontSize: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- AÑADIR ESTE PEQUEÑO WIDGET AL FINAL DE TU ARCHIVO ---
+class _DrawerSocialBtn extends StatelessWidget {
+  final IconData icon;
+  final String url;
+  final Color color;
+
+  const _DrawerSocialBtn({
+    required this.icon,
+    required this.url,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () async {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      },
+      borderRadius: BorderRadius.circular(50),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withOpacity(0.1), // Fondo suave del color de la marca
+        ),
+        child: FaIcon(icon, size: 24, color: color),
+      ),
+    );
+  }
+}
+
+// 2. CARRUSEL DE NOTICIAS
+class _NewsCarouselSection extends ConsumerWidget {
+  const _NewsCarouselSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final newsAsync = ref.watch(newsProvider);
+
+    return SizedBox(
+      height: 180,
+      child: newsAsync.when(
+        loading: () => ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: 3,
+          itemBuilder: (_, __) => Container(
+            width: 280,
+            margin: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+        error: (err, stack) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: themeColor, 
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  type, 
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)
-                ),
-              ),
-              const SizedBox(height: 8),
+              const Icon(Icons.wifi_off, color: Colors.grey),
+              const SizedBox(height: 5),
               Text(
-                name, 
-                style: const TextStyle(
-                  color: Colors.white, 
-                  fontSize: 24, // Un poco más pequeño para que quepa mejor en grid
-                  fontWeight: FontWeight.bold, 
-                  height: 1.1,
-                  shadows: [Shadow(color: Colors.black, blurRadius: 10)]
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                "No se pudieron cargar noticias",
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: badgeColor,
-                  borderRadius: BorderRadius.circular(20),
+            ],
+          ),
+        ),
+        data: (newsList) {
+          if (newsList.isEmpty) return const SizedBox();
+
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: newsList.length,
+            itemBuilder: (context, index) {
+              final item = newsList[index];
+              return Container(
+                width: 280,
+                margin: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: () => launchUrl(Uri.parse(item.link)),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SmartImageContainer(
+                          imageUrl: item.imageUrl,
+                          borderRadius: 0,
+                        ),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.9),
+                            ],
+                            stops: const [0.5, 1.0],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 12,
+                        left: 12,
+                        right: 12,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[900],
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                item.date,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              item.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+// 3. TARJETA DE EVENTO
+class _HubEventCard extends StatelessWidget {
+  final EventModel event;
+  const _HubEventCard({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.go('/event/${event.id}/dashboard'),
+
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        height: 200,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              SmartImageContainer(imageUrl: event.bgImageUrl, borderRadius: 0),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(statusIcon, size: 14, color: itemsColor),
-                    const SizedBox(width: 6),
                     Text(
-                      statusText,
-                      style: TextStyle(color: itemsColor, fontSize: 11, fontWeight: FontWeight.bold),
+                      event.name.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today,
+                          color: Colors.white70,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "${event.startDate.day}/${event.startDate.month} - ${event.endDate.day}/${event.endDate.month}",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -146,258 +822,83 @@ class HubEventCard extends StatelessWidget {
   }
 }
 
-// --- PANTALLA PRINCIPAL (HUB) ---
-class HubScreen extends ConsumerStatefulWidget {
-  const HubScreen({super.key});
-
-  @override
-  ConsumerState<HubScreen> createState() => _HubScreenState();
-}
-
-class _HubScreenState extends ConsumerState<HubScreen> {
-  DateTime? _lastPressedAt;
-  List<dynamic> _events = [];
-  bool _loading = true;
-  String _loadingImage = 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=600';
-  String _loadingMessage = 'Cargando...';
-
-  // Datos de Patrocinadores (Fijos por ahora)
-  final List<Map<String, String>> _sponsors = [
-    {
-      "name": "ACET",
-      "logo":
-          "https://www.torredelmar.org/wp-content/uploads/2024/03/Logo-ACET-Torre-del-Mar--e1711372971163.png",
-      "url": "https://www.torredelmar.org/",
-    },
-    {
-      "name": "Torre del Mar",
-      "logo":
-          "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRp0ljDLY-gdLu9_6WU1DMblFD8frhjonWcGQ&s",
-      "url": "https://velezmalaga.es/",
-    },
-    {
-      "name": "Cervezas Victoria",
-      "logo":
-          "https://www.cervezavictoria.es/sites/default/files/2018-11/posavasos.jpg",
-      "url": "https://www.cervezavictoria.es/",
-    },
-    {
-      "name": "APTA Axarquia Costa del Sol",
-      "logo":
-          "https://www.axarquiacostadelsol.es/wp-content/uploads/2022/06/LogoLineaNegra.png",
-      "url": "https://axarquiacostadelsol.es/",
-    },
-  ];
-
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    final supabase = Supabase.instance.client;
-    final localDb = LocalDbService(); // Instancia para acceder a las cajas
-    // Hay que asegurarse de que Hive ya está init en main.dart, aqui solo
-    //  accedemos a la caja abierta.
-    final eventsBox = Hive.box(LocalDbService.eventsBoxName);
-    
-    if(eventsBox.isNotEmpty){
-      print("💾 Hub: Cargando eventos desde caché...");
-      final cachedEvents = eventsBox.values.map((e) => (e as EventModel).toJson()).toList();
-      // Ordenamos localmente también:
-      cachedEvents.sort((a, b) => (b['start_date'] ?? '').compareTo(a['start_date'] ?? ''));
-
-      if(mounted){
-        setState(() {
-          _events = cachedEvents;
-          _loading = false; // Ya mostramos algo, quitamos el spinner
-        });
-      }
-    }
-
-    // Intento de actualización online
-    try {
-      final results = await Future.wait([
-        supabase.from('events').select().order('start_date', ascending: false),
-        supabase.from('app_config').select(),
-      ]);
-      final eventsData = results[0] as List<dynamic>;
-      final configData = results[1] as List<dynamic>;
-
-      // Guardar configuración:
-      String? bgImage;
-      String? msg;
-      for (var row in configData) {
-        if (row['key'] == 'loading_bg_image') bgImage = row['value'];
-        if (row['key'] == 'loading_message') msg = row['value'];
-      }
-
-      // Guardar Eventos en Hive (para la proxima vez):
-      await eventsBox.clear();
-      for (var eventMap in eventsData) {
-        // Convertimos de Json a Modelo para guardar en Hive
-        final eventModel = EventModel.fromJson(eventMap);
-        await eventsBox.add(eventModel);
-      }
-
-      // Actualiza la UI con datos frescos:      
-      if (mounted) {
-        setState(() {
-          _events = eventsData;
-          if (bgImage != null) _loadingImage = bgImage;
-          if (msg != null) _loadingMessage = msg;
-          _loading = false; 
-        });
-      }
-    } catch (e) {
-      print("⚠️ Error de red en Hub (Modo Offline activo): $e");
-      // Si falló la red y no teníamos caché, quitamos el loading para mostrar "vacio" o error
-      //if (mounted) setState(() => _loading = false);
-      if(_events.isEmpty && mounted) setState(() => _loading = false);
-    }
-  }
-
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return Scaffold(
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            CachedNetworkImage(
-              imageUrl: _loadingImage,
-              fit: BoxFit.cover,
-              placeholder: (_,__) => Container(color: Colors.white),
-            ),
-            Container(color: Colors.black.withOpacity(0.6)),
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.storefront, size: 80, color: Colors.white),
-                  const SizedBox(height: 20),
-                  const CircularProgressIndicator(color: Colors.orange),
-                  const SizedBox(height: 20),
-                  Text(_loadingMessage, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            )
-          ],
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.black : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.black : Colors.grey.shade300,
+          ),
         ),
-      );
-    }
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        final now = DateTime.now();
-        if (_lastPressedAt == null || now.difference(_lastPressedAt!) > const Duration(seconds: 2)) {
-          _lastPressedAt = now;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pulsa otra vez para salir"), duration: Duration(seconds: 2)));
-          return;
-        }
-        SystemNavigator.pop();
-      },
-      child: Scaffold(
-        backgroundColor: Colors.grey[50],
-        body: CustomScrollView(
-          slivers: [
-            // HEADER
-            SliverAppBar(
-                pinned: true, expandedHeight: 100.0, backgroundColor: Colors.white, surfaceTintColor: Colors.white, centerTitle: false,
-                flexibleSpace: FlexibleSpaceBar(
-                  titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-                  title: RichText(text: const TextSpan(children: [TextSpan(text: "VIVE\n", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 24, height: 1.0, fontFamily: 'Roboto')), TextSpan(text: "TORRE DEL MAR", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1.0))])),
-                ),
-                actions: [
-                  Consumer(builder: (context, ref, _) {
-                      final user = ref.watch(authStateProvider).value;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 16.0, bottom: 8.0),
-                        child: GestureDetector(
-                          onTap: () => context.push('/profile'),
-                          child: CircleAvatar(
-                            radius: 22,
-                            backgroundColor: user != null ? Colors.blue[50] : Colors.grey[200],
-                            backgroundImage: user != null ? const NetworkImage('https://i.pravatar.cc/150?img=68') : null,
-                            child: user == null ? const Icon(Icons.person_outline, color: Colors.black54) : null,
-                          ),
-                        ),
-                      );
-                  }),
-                ],
-            ),
-
-            // 1. TÍTULO AGENDA
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                child: const Text("AGENDA", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12, color: Colors.grey)),
-              ),
-            ),
-
-            // 2. GRID DE EVENTOS (RESPONSIVE)
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 500, // En móvil (360px) es 1 columna. En PC (>500) son 2+.
-                  mainAxisSpacing: 20,
-                  crossAxisSpacing: 20,
-                  childAspectRatio: 1.6, // Relación de aspecto de la tarjeta (Ancho/Alto)
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    return HubEventCard(event: _events[index]);
-                  },
-                  childCount: _events.length,
-                ),
-              ),
-            ),
-
-            // 3. PATROCINADORES
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 20),
-                    const Text("ORGANIZA Y COLABORA", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12, color: Colors.grey)),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                       height: 80,
-                       child: ListView.separated(
-                         scrollDirection: Axis.horizontal,
-                         itemCount: _sponsors.length,
-                         separatorBuilder: (_,__) => const SizedBox(width: 16),
-                         itemBuilder: (context, index) {
-                           final sponsor = _sponsors[index];
-                           return GestureDetector(
-                             onTap: () async {
-                               final Uri url = Uri.parse(sponsor["url"]!);
-                               try { await launchUrl(url, mode: LaunchMode.externalApplication); } catch (_) {}
-                             },
-                             child: Container(
-                               width: 80, padding: const EdgeInsets.all(12),
-                               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0,4))]),
-                               child: CachedNetworkImage(imageUrl: sponsor["logo"]!, fit: BoxFit.contain, placeholder: (_,__) => const Center(child: CircularProgressIndicator(strokeWidth: 2)), errorWidget: (_,__,___) => const Icon(Icons.broken_image, color: Colors.grey)),
-                             ),
-                           );
-                         },
-                       ),
-                    ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
+class _EmptyState extends StatelessWidget {
+  final String filter;
+  const _EmptyState({required this.filter});
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.event_busy, size: 50, color: Colors.grey[300]),
+            const SizedBox(height: 10),
+            Text(
+              "No hay eventos aquí",
+              style: TextStyle(color: Colors.grey[500]),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MenuLink extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String url;
+  const _MenuLink({required this.icon, required this.label, required this.url});
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: FaIcon(icon, size: 20, color: Colors.grey[700]),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+      trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+      onTap: () async {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      },
     );
   }
 }

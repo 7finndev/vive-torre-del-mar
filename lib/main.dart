@@ -1,4 +1,7 @@
 // Mi codigo:
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,8 +9,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart'; // <--- IMPORTANTE
 
 import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
-import 'package:torre_del_mar_app/core/router/app_router.dart'; 
+import 'package:torre_del_mar_app/core/router/app_router.dart';
+import 'package:window_manager/window_manager.dart'; 
 
+// Variable global
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,8 +23,33 @@ void main() async {
 
   // --- NUEVO: Inicializar formato de fechas en Español ---
   await initializeDateFormatting('es'); 
-  // ------------------------------------------------------
   
+  // ------------------------------------------------------
+  // ------------------------------------------------------------
+  // BLOQUE DE CONFIGURACIÓN DE VENTANA (SOLO ESCRITORIO)
+  // ------------------------------------------------------------
+  // Verificamos:
+  // 1. Que NO sea Web (kIsWeb es false)
+  // 2. Que sea Linux, Windows o MacOS
+  if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+    
+    await windowManager.ensureInitialized();
+
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(1280, 800),
+      minimumSize: Size(900, 700), // Esto en un móvil sería gigante
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+    );
+    
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+  // ------------------------------------------------------------
   // 2. Inicializar Base de Datos Local (Hive)
   final localDb = LocalDbService();
   await localDb.init();
@@ -51,6 +82,9 @@ class MyApp extends ConsumerWidget {
       
       // Configuración de Rutas
       routerConfig: router,
+      
+      // Asignar la llave aqui
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       
       // Tema base (luego lo haremos dinámico)
       theme: ThemeData(

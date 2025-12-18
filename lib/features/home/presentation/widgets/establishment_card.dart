@@ -1,7 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
+import 'package:torre_del_mar_app/core/utils/smart_image_container.dart'; 
 
 class EstablishmentCard extends StatelessWidget {
   final EstablishmentModel establishment;
@@ -12,33 +12,27 @@ class EstablishmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2, // Sombra suave
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      clipBehavior: Clip.antiAlias, // Corta la imagen para que respete las esquinas
+      clipBehavior: Clip.antiAlias, // Esto recorta la imagen en las esquinas de la tarjeta
       child: InkWell(
         onTap: () => context.push('/detail', extra: establishment),
         child: SizedBox(
-          height: 110, // Altura fija para que todas sean iguales
+          height: 110, 
           child: Row(
             children: [
-              // 1. IMAGEN (MINIATURA) A LA IZQUIERDA
+              // 1. SMART IMAGE CONTAINER
               SizedBox(
                 width: 110, // Cuadrado perfecto
                 height: 110,
-                child: CachedNetworkImage(
-                  imageUrl: establishment.coverImage ?? 'https://via.placeholder.com/150',
-                  fit: BoxFit.cover, // Rellena el cuadrado sin deformar
-                  // Optimizamos memoria bajando una versión pequeña
-                  memCacheWidth: 200, 
-                  placeholder: (_, __) => Container(color: Colors.grey[200]),
-                  errorWidget: (_, __, ___) => Container(
-                    color: Colors.grey[200], 
-                    child: const Icon(Icons.store, color: Colors.grey)
-                  ),
+                child: SmartImageContainer(
+                  imageUrl: establishment.coverImage,
+                  // Ponemos radio 0 porque el Card padre ya se encarga de recortar las esquinas
+                  borderRadius: 0, 
                 ),
               ),
               
-              // 2. INFORMACIÓN A LA DERECHA
+              // 2. INFORMACIÓN A LA DERECHA (Tu código original)
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
@@ -96,7 +90,7 @@ class EstablishmentCard extends StatelessWidget {
                 ),
               ),
 
-              // 3. FLECHITA (Opcional)
+              // 3. FLECHITA
               const Padding(
                 padding: EdgeInsets.only(right: 12.0),
                 child: Icon(Icons.chevron_right, color: Colors.grey),

@@ -120,5 +120,39 @@ final currentEventProvider = AutoDisposeFutureProvider<EventModel>.internal(
 );
 
 typedef CurrentEventRef = AutoDisposeFutureProviderRef<EventModel>;
+String _$activeEventsListHash() => r'fc9e37cac919da6ca8a9efceaeeb45a0e1c0eb12';
+
+/// See also [activeEventsList].
+@ProviderFor(activeEventsList)
+final activeEventsListProvider =
+    AutoDisposeFutureProvider<List<EventModel>>.internal(
+  activeEventsList,
+  name: r'activeEventsListProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$activeEventsListHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef ActiveEventsListRef = AutoDisposeFutureProviderRef<List<EventModel>>;
+String _$allEstablishmentsListHash() =>
+    r'c075aa87774f81cdd330313faaf6665949b3a14b';
+
+/// See also [allEstablishmentsList].
+@ProviderFor(allEstablishmentsList)
+final allEstablishmentsListProvider =
+    AutoDisposeFutureProvider<List<EstablishmentModel>>.internal(
+  allEstablishmentsList,
+  name: r'allEstablishmentsListProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$allEstablishmentsListHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef AllEstablishmentsListRef
+    = AutoDisposeFutureProviderRef<List<EstablishmentModel>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

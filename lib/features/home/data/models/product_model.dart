@@ -13,11 +13,21 @@ class ProductModel extends HiveObject {
   @JsonKey(name: 'establishment_id')
   final int establishmentId;
 
+  // Nuevo campo:
+  @HiveField(9)
+  @JsonKey(name: 'event_id')
+  final int eventId;
+  //-------------------------
+
   @HiveField(2)
   final String name;
 
   @HiveField(3)
   final String? description;
+
+  //Campo ingredientes faltaba:
+  @HiveField(10)
+  final String? ingredients;
 
   @HiveField(4)
   @JsonKey(name: 'image_url')
@@ -41,12 +51,14 @@ class ProductModel extends HiveObject {
   ProductModel({
     required this.id,
     required this.establishmentId,
+    required this.eventId,              //Añadido al constructor.
     required this.name,
     this.description,
+    this.ingredients,                   //Añadido al constructor.
     this.imageUrl,
     this.allergens,
     this.price,
-    this.isWinner = false, // Por defecto no es ganador
+    this.isWinner = false,              // Por defecto no es ganador
     this.isAvailable = true,
   });
 

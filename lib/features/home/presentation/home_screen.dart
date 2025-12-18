@@ -1,286 +1,250 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:url_launcher/url_launcher.dart'; 
+import 'package:torre_del_mar_app/core/constants/app_data.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/ranking_provider.dart';
-import 'package:torre_del_mar_app/features/home/presentation/widgets/home_event_card.dart';
 import 'package:torre_del_mar_app/features/home/presentation/widgets/home_ranking_carousel.dart';
-import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_provider.dart';
+import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
+// IMPORTANTE: Necesitamos el auth provider
+import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    
-    // --- 1. LÓGICA DE SINCRONIZACIÓN Y RED ---
-    // Monitor de conexión "inteligente":
-    // A. Si vuelve internet, recargamos la lista de bares
-    ref.listen(connectivityStreamProvider, (previous, next) {
-      //Solo actuamos si hay un cambio real de estado:
-      if(previous?.value == null) return; // Ignoramos la carga inicial de la app
-
-      final wasOffline = previous!.value?.contains(ConnectivityResult.none);
-      final isNowOnline = !next.value!.contains(ConnectivityResult.none);
-
-      //Solo mosstramos mensaje si estábamos sin internet y ahora volvemos a tener
-      if(wasOffline! && isNowOnline){
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Conexión recuperada! ☁️ Actualizando datos...'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        //Forzamos recarga
-        ref.invalidate(establishmentsListProvider);
-      }
-      /*
-      final isOnline = next.value != null && !next.value!.contains(ConnectivityResult.none);
-      if (isOnline) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Conexión recuperada! ☁️'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        ref.invalidate(establishmentsListProvider);
-      }
-      */
-    });
-
-    // B. Si el usuario cambia (Login), sincronizamos sus votos
-    ref.listen(authStateProvider, (previous, next) async {
-      if (next.value != null) {
-        await ref.read(syncServiceProvider).syncPendingVotes();
-      }
-    });
-    
-    // C. Al arrancar la pantalla, si ya hay usuario, sincronizamos silenciosamente
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (Supabase.instance.client.auth.currentUser != null) {
-         ref.read(syncServiceProvider).syncPendingVotes();
-      }
-    });
-
-    // --- 2. DATOS DEL EVENTO ---
-    //final establishmentsAsync = ref.watch(establishmentsListProvider);
-    final establishmentsAsync = ref.watch(establishmentsListProvider); // <--- ESTA ES LA QUE TE FALTA
-    final rankingAsync = ref.watch(rankingListProvider);
     final eventAsync = ref.watch(currentEventProvider);
+    final rankingAsync = ref.watch(rankingListProvider);
+    final establishmentsAsync = ref.watch(establishmentsListProvider);
+    
+    // 1. ESCUCHAMOS AL USUARIO PARA EL AVATAR
+    final authState = ref.watch(authStateProvider);
+    final user = authState.value;
+    String? avatarUrl;
+    if (user != null && user.userMetadata != null && user.userMetadata!.containsKey('avatar_url')) {
+      avatarUrl = user.userMetadata!['avatar_url'];
+    }
 
-    // Valores por defecto (mientras carga)
-    String bgImage = 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=600';
+    // Valores por defecto
+    String bgImage = 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg';
+    String eventName = "CARGANDO...";
+    int eventId = 1;
     Color themeColor = Colors.orange;
-    String titleLine1 = "CARGANDO...";
-    String titleLine2 = "TORRE DEL MAR";
-    String cardTitle = "Ver Mapa";
-    int eventId = 1; // Fallback ID
 
-    // Procesamos los datos del evento si ya llegaron
     if (eventAsync.hasValue && eventAsync.value != null) {
-        final event = eventAsync.value!;
-        eventId = event.id;
-        
-        // Imagen de fondo
-        if (event.bgImageUrl != null && event.bgImageUrl!.isNotEmpty) {
-          bgImage = event.bgImageUrl!;
-        }
-        
-        // Color del tema
-        try {
-          themeColor = Color(int.parse(event.themeColorHex.replaceAll('#', '0xff')));
-        } catch (_) {}
-        
-        // Título Dinámico (Separa "Ruta..." de "2026")
-        final fullName = event.name.toUpperCase();
-        final yearRegex = RegExp(r' \d{4}$');
-        
-        if (yearRegex.hasMatch(fullName)) {
-           titleLine1 = fullName.replaceAll(yearRegex, ''); // Ej: RUTA DEL CÓCTEL
-           final year = yearRegex.firstMatch(fullName)?.group(0)?.trim();
-           titleLine2 = "TORRE DEL MAR $year";
-        } else {
-           titleLine1 = fullName;
-           titleLine2 = "TORRE DEL MAR";
-        }
-
-        // Texto de la tarjeta según tipo
-        if (event.type == 'drinks') {
-          cardTitle = "Ruta de Cócteles";
-        } else {
-          cardTitle = "Ver Mapa";
-        }
+      final event = eventAsync.value!;
+      eventId = event.id;
+      eventName = event.name.toUpperCase();
+      if (event.bgImageUrl != null && event.bgImageUrl!.isNotEmpty) {
+        bgImage = event.bgImageUrl!;
+      }
+      try {
+        themeColor = Color(int.parse(event.themeColorHex.replaceAll('#', '0xff')));
+      } catch (_) {}
     }
 
     return Scaffold(
-      backgroundColor: themeColor.withOpacity(0.03),//Colors.grey[50],
+      backgroundColor: Colors.grey[50],
       body: CustomScrollView(
         slivers: [
-          // --- HEADER DINÁMICO ---
+          // 1. CABECERA LIMPIA
           SliverAppBar(
             pinned: true,
-            expandedHeight: 160.0, // Alto para lucir la foto
-            backgroundColor: themeColor, // Color de respaldo
-            surfaceTintColor: Colors.white,
-            
-            // Botón "Volver al Hub" 
+            expandedHeight: 280.0,
+            backgroundColor: themeColor,
             leading: IconButton(
-              tooltip: "Volver al inicio",
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Colors.white, // Fondo blanco para resaltar sobre la foto
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.apps_rounded, color: Colors.black87, size: 22),
-              ),
-              onPressed: () => context.go('/'), 
+               icon: Container(
+                 padding: const EdgeInsets.all(8),
+                 decoration: const BoxDecoration(color: Colors.black26, shape: BoxShape.circle),
+                 child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+               ),
+               onPressed: () => context.go('/'),
             ),
-
+            actions: [
+               // --- AVATAR DINÁMICO ---
+               GestureDetector(
+                 onTap: () => context.push('/profile', extra: eventId), // Pasamos el ID del evento
+                 child: Container(
+                   margin: const EdgeInsets.only(right: 16),
+                   padding: const EdgeInsets.all(2), // Borde blanco fino
+                   decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                   child: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.grey[200],
+                      // Si hay URL, la mostramos. Si no, icono por defecto.
+                      backgroundImage: avatarUrl != null 
+                          ? NetworkImage(avatarUrl) 
+                          : null,
+                      child: avatarUrl == null
+                          ? Icon(Icons.person, color: Colors.grey[600], size: 20)
+                          : null,
+                   ),
+                 ),
+               ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               centerTitle: true,
-              titlePadding: const EdgeInsets.only(left: 60, right: 60, bottom: 16),
-              
-              // TÍTULO
-              title: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                     Text(
-                      titleLine1, 
-                      style: const TextStyle(
-                        color: Colors.white, 
-                        fontWeight: FontWeight.w900, 
-                        fontSize: 20, 
-                        height: 1.0,
-                        letterSpacing: -0.5,
-                        shadows: [Shadow(color: Colors.black, blurRadius: 10)]
-                      )
-                     ),
-                     Text(
-                      titleLine2, 
-                      style: TextStyle(
-                        color: themeColor.computeLuminance() > 0.5 ? Colors.black : Colors.white, // Contraste automático
-                        fontWeight: FontWeight.bold, 
-                        fontSize: 10,
-                        shadows: const [Shadow(color: Colors.black, blurRadius: 5)]
-                      )
-                     ),
-                  ],
+              title: Text(
+                eventName,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  shadows: [Shadow(color: Colors.black, blurRadius: 10)],
                 ),
               ),
-
-              // FONDO (IMAGEN)
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                   CachedNetworkImage(
-                     imageUrl: bgImage, 
-                     fit: BoxFit.cover,
-                     placeholder: (_,__) => Container(color: themeColor),
-                     errorWidget: (_,__,___) => Container(color: themeColor),
-                   ),
-                   // Velo oscuro para leer texto
-                   Container(
-                     decoration: BoxDecoration(
-                       gradient: LinearGradient(
-                         begin: Alignment.topCenter,
-                         end: Alignment.bottomCenter,
-                         colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
-                       )
-                     )
-                   ), 
+                  SmartImageContainer(
+                    imageUrl: bgImage,
+                    borderRadius: 0,
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.4),
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.8),
+                        ],
+                        stops: const [0.0, 0.5, 1.0],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            
-            // Botón Perfil
-            actions: [
-              Consumer(
-                builder: (context, ref, child) {
-                  final userAsync = ref.watch(authStateProvider);
-                  final user = userAsync.value;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 16.0),
-                    child: GestureDetector(
-                      onTap: () => context.push('/profile'),
-                      child: CircleAvatar(
-                        radius: 18,
-                        backgroundColor: Colors.white,
-                        backgroundImage: user != null ? const NetworkImage('https://i.pravatar.cc/150?img=68') : null,
-                        child: user == null ? const Icon(Icons.person, size: 20, color: Colors.grey) : null,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
           ),
 
-          // --- CONTENIDO DEL DASHBOARD ---
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Tarjeta Mapa
-                  HomeEventCard(
-                    title: cardTitle,
-                    imageUrl: bgImage, // Reusamos la imagen del evento para coherencia
-                    onTap: () => context.go('/event/$eventId/map'),
-                  ),
                   
-                  const SizedBox(height: 30),
+                  // BOTÓN EXPLORAR RUTA
+                  Container(
+                    width: double.infinity,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: themeColor,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(color: themeColor.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5))
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => context.go('/event/$eventId/map'),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.map_outlined, color: Colors.white, size: 28),
+                            SizedBox(width: 12),
+                            Text(
+                              "EXPLORAR RUTA",
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
 
-                  // Sección Destacados
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  const SizedBox(height: 40),
+
+                  // RANKING (Favoritos)
+                  const Row(
                     children: [
-                      _SectionTitle(title: 'Favoritos ⭐', color: themeColor),
-                      //if (establishmentsAsync.isLoading)
-                      if (rankingAsync.isLoading)
-                        const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
+                      Icon(Icons.emoji_events, color: Colors.amber),
+                      SizedBox(width: 8),
+                      Text(
+                        "FAVORITOS DEL PÚBLICO",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  
-                  // Lista Horizontal
-                  //HomeEstablishmentsList(establishmentsAsync: establishmentsAsync),
-                  HomeRankingCarousel(rankingAsync: rankingAsync,
+                  HomeRankingCarousel(
+                    rankingAsync: rankingAsync,
                     establishmentsAsync: establishmentsAsync,
                   ),
+
+                  const SizedBox(height: 40),
+
+                  // PATROCINADORES DEL EVENTO
+                  const Center(
+                    child: Text(
+                      "PATROCINADORES OFICIALES",
+                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  GridView.builder(
+                    shrinkWrap: true, 
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1.8, 
+                    ),
+                    itemCount: AppData.sponsors.length,
+                    itemBuilder: (context, index) {
+                      final s = AppData.sponsors[index];
+                      final String? url = s['url'];
+                      final String imageUrl = s['logo']!;
+                      
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: url != null && url.isNotEmpty
+                                  ? () async {
+                                      final uri = Uri.parse(url);
+                                      if (await canLaunchUrl(uri)) {
+                                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                      }
+                                    }
+                                  : null,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Center(
+                                  // Corrección también aquí para evitar bordes dobles
+                                  child: Image.network(imageUrl, fit: BoxFit.contain), 
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                   
-                  const SizedBox(height: 80), // Espacio final
+                  const SizedBox(height: 60),
                 ],
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-// Widget auxiliar de Título
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  final Color color;
-  const _SectionTitle({required this.title, required this.color});
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title, 
-      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)
     );
   }
 }

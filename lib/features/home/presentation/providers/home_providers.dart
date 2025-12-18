@@ -2,6 +2,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
@@ -12,18 +13,23 @@ import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 // Parte necesaria para la generación de código de Riverpod
 part 'home_providers.g.dart';
 
-// Este provider guarda el ID del evento que estamos viendo ahora mismo.
+// Este provider guarda el ID del evento que estamos viendo ahora mismo (USUARIO FINAL).
 final currentEventIdProvider = StateProvider<int>((ref) => 1); // Por defecto 1
 // ----------------------------------------
+
+// Estado para guardar el filtro del Hub (activo, proximos, historico)
+// Al ser StateProvider, no necesita 'buil_runner'
+final hubFilterProvider = StateProvider<String>((ref) => 'active');
+
 
 // 1. Proveedor de la BD Local
 @riverpod
 LocalDbService localDb(LocalDbRef ref) {
   return LocalDbService(); 
-  // Nota: Ya llamamos a .init() en main.dart, así que aquí solo instanciamos
+  // Nota: Ya llamamos a .init() en main.dart
 }
 
-// 2. Proveedor del Repositorio
+// 2. Proveedor del Repositorio de Establecimientos
 @riverpod
 EstablishmentRepository establishmentRepository(EstablishmentRepositoryRef ref) {
   final supabase = Supabase.instance.client;
@@ -31,38 +37,31 @@ EstablishmentRepository establishmentRepository(EstablishmentRepositoryRef ref) 
   return EstablishmentRepository(supabase, localDb);
 }
 
-// 3. Proveedor de la LISTA DE BARES (Lo que usará la UI)
+// 3. Proveedor de la LISTA DE BARES (Filtrada por evento actual - PARA USUARIO)
 @riverpod
 Future<List<EstablishmentModel>> establishmentsList(EstablishmentsListRef ref) async {
-  // Este provider se encarga de llamar al método inteligente getEstablishments
   final repository = ref.watch(establishmentRepositoryProvider);
-
-  // 1.-Esperamos a saber en qué evento estamos:
+  // 1. Esperamos a saber en qué evento estamos
   final event = await ref.watch(currentEventProvider.future);
-
-  // 2.-Pedimos solo los locales de ese evento:
+  // 2. Pedimos solo los locales de ese evento
   return repository.getEstablishments(eventId: event.id);
 }
 
-// NUEVO: Un Stream que emite eventos cada vez que cambia la red (WiFi <-> 4G <-> Nada)
+// 4. Stream de Conectividad
 @riverpod
 Stream<List<ConnectivityResult>> connectivityStream(ConnectivityStreamRef ref) {
   return Connectivity().onConnectivityChanged;
 }
-// NUEVO PROVIDER: Lista de Productos (Tapas)
+
+// 5. Proveedor de la LISTA DE PRODUCTOS (Filtrada por evento actual - PARA USUARIO)
 @riverpod
 Future<List<ProductModel>> productsList(ProductsListRef ref) async {
   final repository = ref.watch(establishmentRepositoryProvider);
-
-  //1.-Obtenemos primero la configuración del evento activo
-  // future asegura que esperamos a que cargue el evento.
   final event = await ref.watch(currentEventProvider.future);
-
-  //2.-Le pasamos ese ID dinámico al repositorio
   return repository.getProducts(eventId: event.id);
 }
 
-// Proveedor del Repositorio de Pasaporte
+// 6. Proveedor del Repositorio de Pasaporte
 @riverpod
 PassportRepository passportRepository(PassportRepositoryRef ref) {
   final supabase = Supabase.instance.client;
@@ -70,29 +69,46 @@ PassportRepository passportRepository(PassportRepositoryRef ref) {
   return PassportRepository(supabase, localDb);
 }
 
-
-// Actualizamos el provider que descarga el evento para que lea ese ID
+// 7. Evento Actual (Objeto completo basado en ID seleccionado)
 @riverpod
 Future<EventModel> currentEvent(CurrentEventRef ref) async {
-  final id = ref.watch(currentEventIdProvider); // <--- AHORA ES DINÁMICO
+  final id = ref.watch(currentEventIdProvider);
   final supabase = Supabase.instance.client;
   
   final response = await supabase.from('events').select().eq('id', id).single();
   return EventModel.fromJson(response);
 }
-/*
-// Provider para obtener datos del Evento Activo (ID 1 por ahora)
+
+// =================================================================
+// 🆕 PROVIDERS PARA EL PANEL DE ADMINISTRACIÓN (ZONA ADMIN)
+// =================================================================
+
+// 8. Lista de Eventos ACTIVOS o PRÓXIMOS (Para el Dropdown del Admin)
 @riverpod
-Future<EventModel> currentEvent(CurrentEventRef ref) async {
+Future<List<EventModel>> activeEventsList(ActiveEventsListRef ref) async {
   final supabase = Supabase.instance.client;
   
-  // Leemos el evento 1 de Supabase
+  // Traemos eventos 'active' o 'upcoming' para poder añadirles tapas antes de que empiecen
   final response = await supabase
       .from('events')
       .select()
-      .eq('id', 1)
-      .single();
-      
-  return EventModel.fromJson(response);
+      .or('status.eq.active,status.eq.upcoming')
+      .order('start_date', ascending: false);
+  
+  return response.map((e) => EventModel.fromJson(e)).toList();
 }
-*/
+
+// 9. Lista MAESTRA de Establecimientos (Para vincular al Admin)
+// Nota: Traemos TODOS los bares ordenados alfabéticamente.
+// El admin debe seleccionar cuál de todos los bares de la BD va a participar.
+@riverpod
+Future<List<EstablishmentModel>> allEstablishmentsList(AllEstablishmentsListRef ref) async {
+  final supabase = Supabase.instance.client;
+  
+  final response = await supabase
+      .from('establishments')
+      .select()
+      .order('name', ascending: true); // A-Z
+
+  return response.map((e) => EstablishmentModel.fromJson(e)).toList();
+}

@@ -1,9 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
+
+import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
 
 class TapasListScreen extends ConsumerWidget {
   const TapasListScreen({super.key});
@@ -15,12 +16,12 @@ class TapasListScreen extends ConsumerWidget {
     final establishmentsAsync = ref.watch(establishmentsListProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Galería de Tapas")),
+      appBar: AppBar(title: const Text("Galería de Productos")), // Texto más genérico
       body: productsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Error: $err')),
         data: (tapas) {
-          if (tapas.isEmpty) return const Center(child: Text("No hay tapas cargadas."));
+          if (tapas.isEmpty) return const Center(child: Text("No hay productos cargados."));
 
           return GridView.builder(
             padding: const EdgeInsets.all(16),
@@ -34,7 +35,7 @@ class TapasListScreen extends ConsumerWidget {
             itemBuilder: (context, index) {
               final tapa = tapas[index];
               
-              // Buscamos el bar dueño de esta tapa (si ya cargaron los bares)
+              // Buscamos el bar dueño de esta tapa
               final establishments = establishmentsAsync.value ?? [];
               final bar = establishments.firstWhere(
                 (e) => e.id == tapa.establishmentId,
@@ -42,7 +43,6 @@ class TapasListScreen extends ConsumerWidget {
               );
 
               return GestureDetector(
-                // Al pulsar la tapa, vamos a la ficha del BAR (porque ahí se sella)
                 onTap: () {
                   if (bar.id != -1) {
                     context.push('/detail', extra: bar);
@@ -59,19 +59,21 @@ class TapasListScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // FOTO TAPA
+                      // --- FOTO PRODUCTO CON SMART IMAGE ---
                       Expanded(
                         child: ClipRRect(
+                          // Mantenemos esto para redondear SOLO arriba
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                          child: CachedNetworkImage(
-                            imageUrl: tapa.imageUrl ?? 'https://via.placeholder.com/300',
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            memCacheWidth: 300,
-                            errorWidget: (_,__,___) => const Icon(Icons.fastfood, color: Colors.grey),
+                          child: SmartImageContainer(
+                            imageUrl: tapa.imageUrl,
+                            // Ponemos 0 porque el ClipRRect padre ya recorta la forma
+                            borderRadius: 0, 
+                            // Opcional: Si quieres que el círculo interior (si fuera logo)
+                            // no se use, dejamos isCircle: false por defecto.
                           ),
                         ),
                       ),
+                      
                       // TEXTOS
                       Padding(
                         padding: const EdgeInsets.all(10.0),
@@ -86,14 +88,18 @@ class TapasListScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              bar.name, // Nombre del bar
+                              bar.name, 
                               style: TextStyle(color: Colors.grey[600], fontSize: 12),
                               maxLines: 1,
+                              overflow: TextOverflow.ellipsis, // Evita errores si es muy largo
                             ),
                             if (tapa.price != null)
-                              Text(
-                                "${tapa.price}€",
-                                style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  "${tapa.price}€",
+                                  style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                                ),
                               ),
                           ],
                         ),

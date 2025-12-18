@@ -35,13 +35,16 @@ class EstablishmentModelAdapter extends TypeAdapter<EstablishmentModel> {
       ownerEmail: fields[15] as String?,
       isPartner: fields[16] == null ? true : fields[16] as bool,
       socialTiktok: fields[17] as String?,
+      facebook: fields[18] as String?,
+      instagram: fields[19] as String?,
+      products: (fields[20] as List?)?.cast<ProductModel>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, EstablishmentModel obj) {
     writer
-      ..writeByte(18)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,8 +65,6 @@ class EstablishmentModelAdapter extends TypeAdapter<EstablishmentModel> {
       ..write(obj.description)
       ..writeByte(9)
       ..write(obj.phone)
-      ..writeByte(10)
-      ..write(obj.website)
       ..writeByte(11)
       ..write(obj.schedule)
       ..writeByte(12)
@@ -76,8 +77,16 @@ class EstablishmentModelAdapter extends TypeAdapter<EstablishmentModel> {
       ..write(obj.ownerEmail)
       ..writeByte(16)
       ..write(obj.isPartner)
+      ..writeByte(10)
+      ..write(obj.website)
       ..writeByte(17)
-      ..write(obj.socialTiktok);
+      ..write(obj.socialTiktok)
+      ..writeByte(18)
+      ..write(obj.facebook)
+      ..writeByte(19)
+      ..write(obj.instagram)
+      ..writeByte(20)
+      ..write(obj.products);
   }
 
   @override
@@ -115,6 +124,11 @@ EstablishmentModel _$EstablishmentModelFromJson(Map<String, dynamic> json) =>
       ownerEmail: json['owner_email'] as String?,
       isPartner: json['is_partner'] as bool? ?? true,
       socialTiktok: json['social_tiktok'] as String?,
+      facebook: json['facebook'] as String?,
+      instagram: json['instagram'] as String?,
+      products: (json['products'] as List<dynamic>?)
+          ?.map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
 
 Map<String, dynamic> _$EstablishmentModelToJson(EstablishmentModel instance) =>
@@ -129,12 +143,14 @@ Map<String, dynamic> _$EstablishmentModelToJson(EstablishmentModel instance) =>
       'google_place_id': instance.googlePlaceId,
       'description': instance.description,
       'phone': instance.phone,
-      'website': instance.website,
       'schedule': instance.schedule,
       'cover_image': instance.coverImage,
       'owner_name': instance.ownerName,
       'owner_phone': instance.ownerPhone,
       'owner_email': instance.ownerEmail,
       'is_partner': instance.isPartner,
+      'website': instance.website,
       'social_tiktok': instance.socialTiktok,
+      'facebook': instance.facebook,
+      'instagram': instance.instagram,
     };

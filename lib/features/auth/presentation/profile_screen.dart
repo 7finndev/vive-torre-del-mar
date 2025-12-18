@@ -1,474 +1,426 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart'; // NECESARIO
+import 'package:go_router/go_router.dart';
 import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_provider.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // <--- AÑADIR
-import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart'; // <--- AÑADIR
 
 class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+  // Recibo el ID del evento (puede ser nulo)
+  final int? eventId;
+  const ProfileScreen({super.key, this.eventId});
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  // Controladores para el formulario
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _isLoading = false;
-  bool _isLoginMode = true; // Para alternar entre Login y Registro
-  // Variables de estado para los datos del perfil
-  String? _fullName;
-  String? _phone;
-  bool _isEditing = false;
+  final _formKey = GlobalKey<FormState>();
+  
+  // Controladores
+  late TextEditingController _nameController;
+  late TextEditingController _phoneController;
+  late TextEditingController _emailController;
 
-  // Controladores para editar
-  final _nameEditController = TextEditingController();
-  final _phoneEditController = TextEditingController();
+  File? _selectedImage;
+  bool _isLoading = false;
+  bool _isEditing = false; // Para habilitar/deshabilitar edición
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
-  }
-
-  Future<void> _loadProfile() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user != null) {
-      try {
-        // CAMBIO CLAVE: Usamos .maybeSingle() en lugar de .single()
-        // Esto devuelve 'null' si no encuentra el perfil, en vez de dar error.
-        final data = await Supabase.instance.client
-            .from('profiles')
-            .select()
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (data != null) {
-          setState(() {
-            _fullName = data['full_name'];
-            _phone = data['phone'];
-            _nameEditController.text = _fullName ?? '';
-            _phoneEditController.text = _phone ?? '';
-          });
-        } else {
-          print("⚠️ El usuario no tiene perfil creado en la tabla pública.");
-          // Opcional: Podríamos crearlo aquí automáticamente si quisiéramos
-        }
-      } catch (e) {
-        print("Error cargando perfil: $e");
-      }
-    }
-  }
-
-  Future<void> _saveProfile() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    await Supabase.instance.client
-        .from('profiles')
-        .update({
-          'full_name': _nameEditController.text,
-          'phone': _phoneEditController.text,
-        })
-        .eq('id', user.id);
-
-    await _loadProfile(); // Recargar
-    setState(() => _isEditing = false);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Perfil actualizado ✅"),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
+    // Inicializamos con datos vacíos, luego en el build se rellenan
+    _nameController = TextEditingController();
+    _phoneController = TextEditingController();
+    _emailController = TextEditingController();
   }
 
   @override
-  Widget build(BuildContext context) {
-    // Escuchamos al usuario actual
-    final userAsync = ref.watch(authStateProvider);
-
-    return Scaffold(
-      appBar: AppBar(title: const Text("Mi Perfil")),
-      body: userAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
-        data: (user) {
-          // A. SI HAY USUARIO -> MOSTRAR PERFIL
-          if (user != null) {
-            return SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    // TARJETA DE SOCIO DIGITAL
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          const CircleAvatar(
-                            radius: 40,
-                            backgroundColor: Colors.blue,
-                            child: Icon(
-                              Icons.person,
-                              size: 40,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            user.email ?? "Usuario",
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Text(
-                            "Participante Oficial",
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                          const Divider(height: 40),
-
-                          // CÓDIGO QR DEL USUARIO (Su ID)
-                          QrImageView(
-                            data:
-                                user.id, // El contenido es su UUID de Supabase
-                            version: QrVersions.auto,
-                            size: 180.0,
-                            foregroundColor: Colors.black87,
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // SECCIÓN DE DATOS PERSONALES
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: IconButton(
-                              icon: Icon(
-                                _isEditing ? Icons.save : Icons.edit,
-                                color: Colors.blue,
-                              ),
-                              onPressed: () {
-                                if (_isEditing) {
-                                  _saveProfile();
-                                } else {
-                                  setState(() => _isEditing = true);
-                                }
-                              },
-                            ),
-                          ),
-
-                          _isEditing
-                              ? Column(
-                                  children: [
-                                    TextField(
-                                      controller: _nameEditController,
-                                      decoration: const InputDecoration(
-                                        labelText: "Nombre Completo",
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    TextField(
-                                      controller: _phoneEditController,
-                                      decoration: const InputDecoration(
-                                        labelText: "Teléfono",
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  children: [
-                                    Text(
-                                      _fullName ?? "Sin nombre",
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      _phone ?? "Sin teléfono",
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                          Text(
-                            "Muestra este código para canjear premios",
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[400],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    // BOTONES DE ACCIÓN
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          final count = await ref
-                              .read(syncServiceProvider)
-                              .syncPendingVotes();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  "Sincronizado: $count nuevos sellos subidos",
-                                ),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.cloud_upload),
-                        label: const Text("Sincronizar Pasaporte"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[50],
-                          foregroundColor: Colors.blue,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Botón Vincular Físico (Placeholder)
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "Próximamente: Escanear Pasaporte Físico",
-                              ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.link),
-                        label: const Text("Vincular Pasaporte Físico"),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-                    // BOTÓN CERRAR SESIÓN (CON LIMPIEZA)
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () async {
-                          // 1. Cerrar sesión en la Nube (Supabase)
-                          await ref.read(authRepositoryProvider).signOut();
-
-                          // 2. BORRAR DATOS LOCALES (Hive)
-                          // Importante: Borramos tanto los pendientes como los sincronizados
-                          // para que el próximo usuario empiece limpio.
-                          await Hive.box(
-                            LocalDbService.syncedStampsBoxName,
-                          ).clear();
-                          await Hive.box(
-                            LocalDbService.pendingVotesBoxName,
-                          ).clear();
-
-                          // 3. Notificar al usuario
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  "Sesión cerrada. Datos locales borrados.",
-                                ),
-                                backgroundColor: Colors.grey,
-                              ),
-                            );
-                          }
-                        },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          side: const BorderSide(color: Colors.red),
-                          foregroundColor: Colors.red,
-                        ),
-                        child: const Text("Cerrar Sesión"),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          // B. SI NO HAY USUARIO -> FORMULARIO DE LOGIN
-          return Center(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _isLoginMode ? "Iniciar Sesión" : "Crear Cuenta",
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // ... (El resto de tus TextFields y Botones sigue igual) ...
-                    TextField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: "Email",
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _passwordController,
-                      decoration: const InputDecoration(
-                        labelText: "Contraseña",
-                        border: OutlineInputBorder(),
-                      ),
-                      obscureText: true,
-                    ),
-                    const SizedBox(height: 30),
-
-                    if (_isLoading) const CircularProgressIndicator(),
-
-                    if (!_isLoading)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _submit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                          ),
-                          child: Text(_isLoginMode ? "Entrar" : "Registrarse"),
-                        ),
-                      ),
-
-                    const SizedBox(height: 20),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isLoginMode = !_isLoginMode;
-                        });
-                      },
-                      child: Text(
-                        _isLoginMode
-                            ? "¿No tienes cuenta? Regístrate"
-                            : "¿Ya tienes cuenta? Inicia Sesión",
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    super.dispose();
   }
 
-  Future<void> _submit() async {
+  // Función para elegir foto
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery, 
+      maxWidth: 600, // Optimizamos tamaño
+    );
+
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+        _isEditing = true; // Si cambia foto, activamos modo guardado
+      });
+    }
+  }
+
+  // Función para guardar
+  Future<void> _saveProfile(String userId) async {
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
+
     try {
-      final auth = ref.read(authRepositoryProvider);
+      await ref.read(authRepositoryProvider).updateProfile(
+        userId: userId,
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        imageFile: _selectedImage,
+      );
 
-      if (_isLoginMode) {
-        // --- MODO LOGIN ---
-        await auth.signIn(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Perfil actualizado correctamente'), backgroundColor: Colors.green),
         );
-        await _loadProfile();
-        // Si la línea de arriba no dio error, estamos dentro. Sincronizamos ya.
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Sesión iniciada. Recuperando tus sellos... ⏳"),
-            ),
-          );
-          // Disparamos la sincronización (bajada y subida)
-          await ref.read(syncServiceProvider).syncPendingVotes();
-        }
-        // Si no da error, Riverpod detectará el cambio de usuario y redibujará la pantalla sola.
-      } else {
-        // --- MODO REGISTRO ---
-        await auth.signUp(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("¡Cuenta creada! Iniciando sesión..."),
-              backgroundColor: Colors.green,
-            ),
-          );
-
-          // TRUCO: Intentamos iniciar sesión automáticamente tras el registro
-          // (Supabase a veces lo hace solo, pero esto lo asegura si no hay confirmación de email)
-          try {
-            await auth.signIn(
-              _emailController.text.trim(),
-              _passwordController.text.trim(),
-            );
-          } catch (_) {
-            // Si falla el autologin (ej: requiere confirmar email), cambiamos a modo login
-            setState(() {
-              _isLoginMode = true;
-            });
-          }
-        }
+        setState(() => _isEditing = false); // Volvemos a modo lectura
       }
     } catch (e) {
       if (mounted) {
-        // Mensaje de error amigable
-        String message = "Error desconocido";
-        if (e.toString().contains("Invalid login")) {
-          message = "Email o contraseña incorrectos.";
-        }
-        if (e.toString().contains("already registered")) {
-          message = "Este email ya está registrado.";
-        }
-
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+    final user = authState.value;
+
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Mi Perfil")),
+        body: const Center(child: Text("No hay sesión activa")),
+      );
+    }
+
+    // Rellenar datos iniciales si no se está editando
+    if (!_isEditing && _nameController.text.isEmpty) {
+      final meta = user.userMetadata;
+      _emailController.text = user.email ?? '';
+      _nameController.text = meta?['full_name'] ?? meta?['name'] ?? '';
+      _phoneController.text = meta?['phone'] ?? '';
+    }
+
+    final String avatarUrl = user.userMetadata?['avatar_url'] ?? '';
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("Mi Perfil", style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
+        actions: [
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.check, color: Colors.blue),
+              onPressed: _isLoading ? null : () => _saveProfile(user.id),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.black),
+              onPressed: () => setState(() => _isEditing = true),
+            ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // 1. AVATAR CON CÁMARA
+              Center(
+                child: Stack(
+                  children: [
+                    GestureDetector(
+                      onTap: _isEditing ? _pickImage : null,
+                      child: CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: _selectedImage != null
+                            ? FileImage(_selectedImage!)
+                            : (avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null) as ImageProvider?,
+                        child: (_selectedImage == null && avatarUrl.isEmpty)
+                            ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                            : null,
+                      ),
+                    ),
+                    if (_isEditing)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+
+              // 2. CAMPOS DE TEXTO
+              _buildTextField(
+                label: "Nombre Completo",
+                controller: _nameController,
+                icon: Icons.person_outline,
+                enabled: _isEditing,
+              ),
+              const SizedBox(height: 15),
+              _buildTextField(
+                label: "Teléfono",
+                controller: _phoneController,
+                icon: Icons.phone_outlined,
+                enabled: _isEditing,
+                inputType: TextInputType.phone,
+              ),
+              const SizedBox(height: 15),
+              _buildTextField(
+                label: "Correo Electrónico",
+                controller: _emailController,
+                icon: Icons.email_outlined,
+                enabled: false, // El email no se suele cambiar así como así
+                isReadOnly: true,
+              ),
+
+              const SizedBox(height: 30),
+
+              // --- SECCIÓN PASAPORTE (SOLO SI HAY EVENTO) ---
+              if (widget.eventId != null && !_isEditing) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50], 
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        "GESTIÓN DE PASAPORTE",
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, letterSpacing: 1.2),
+                      ),
+                      const SizedBox(height: 15),
+                      
+                      // BOTÓN SINCRONIZAR (CON FUNCIONALIDAD REAL)
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          // 1. Feedback visual inmediato
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Sincronizando votos con la nube... ☁️")),
+                          );
+                          
+                          try {
+                            // 2. LLAMADA REAL A TU SERVICIO DE SINCRONIZACIÓN
+                            // Usamos el eventId que recibimos en el perfil
+                            await ref.read(syncServiceProvider).syncPendingVotes(
+                              targetEventId: widget.eventId!,
+                            );
+                            
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("¡Sincronización completada! ✅"),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.sync, color: Colors.orange),
+                        label: const Text("Sincronizar Votos", style: TextStyle(color: Colors.orange)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.orange.shade300),
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 10),
+                      
+                      // Botón Vincular Físico
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          context.push('/scan_physical_passport');
+                        },
+                        icon: const Icon(Icons.qr_code, color: Colors.brown),
+                        label: const Text("Vincular Pasaporte Físico", style: TextStyle(color: Colors.brown)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.brown.shade300),
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // MENOS ESPACIO AQUÍ (Para pegarlo al QR)
+                const SizedBox(height: 30),
+              ],
+              
+              // -----------------------------------------------------
+              // 3. TARJETA DE IDENTIFICACIÓN (QR)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.blue.shade100),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      "TU QR",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold, 
+                        color: Colors.blue, 
+                        letterSpacing: 1.2
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                      child: QrImageView(
+                        data: user.id, // El ID único de Supabase
+                        version: QrVersions.auto,
+                        size: 160.0,
+                        backgroundColor: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Muestra este código a la organización para identificarte o recoger premios.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 30),
+
+              // 4. BOTÓN CERRAR SESIÓN CON SEGURIDAD
+              if (!_isEditing)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    // AQUÍ EMPIEZA LA LÓGICA SEGURA
+                    onPressed: () async {
+                      final repo = ref.read(passportRepositoryProvider);
+                      final authRepo = ref.read(authRepositoryProvider);
+
+                      // A. ¿HAY DATOS PENDIENTES EN EL MÓVIL?
+                      if (repo.hasPendingData) {
+                        // Mostramos alerta
+                        final bool? confirmDelete = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text("⚠️ Datos sin guardar"),
+                            content: const Text(
+                              "Tienes votos en el pasaporte que aún no se han subido a la nube.\n\n"
+                              "Si cierras sesión ahora, se borrarán del móvil y los perderás.\n\n"
+                              "¿Estás seguro de que quieres salir?",
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false), // Cancelar
+                                child: const Text("CANCELAR"),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true), // Aceptar borrado
+                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                child: const Text("PERDER DATOS Y SALIR"),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        // Si el usuario cancela o toca fuera, NO hacemos nada.
+                        if (confirmDelete != true) return;
+                      }
+
+                      // B. SI NO HAY PENDIENTES O EL USUARIO ACEPTÓ BORRARLOS:
+                      
+                      // 1. Limpiamos la base de datos local (para que no los vea el siguiente usuario)
+                      await repo.clearLocalData();
+                      
+                      // 2. Cerramos sesión en Supabase
+                      await authRepo.signOut();
+                      
+                      // 3. Salimos de la pantalla de perfil
+                      if (context.mounted) context.pop(); 
+                    },
+                    // FIN DE LA LÓGICA
+                    
+                    icon: const Icon(Icons.logout, color: Colors.red),
+                    label: const Text("Cerrar Sesión", style: TextStyle(color: Colors.red)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      side: const BorderSide(color: Colors.red),
+                    ),
+                  ),
+                ),            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required String label,
+    required TextEditingController controller,
+    required IconData icon,
+    bool enabled = true,
+    bool isReadOnly = false,
+    TextInputType inputType = TextInputType.text,
+  }) {
+    return TextFormField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: inputType,
+      style: TextStyle(color: isReadOnly ? Colors.grey[600] : Colors.black),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.grey),
+        filled: !enabled || isReadOnly,
+        fillColor: Colors.grey[50],
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.blue),
+        ),
+      ),
+    );
   }
 }

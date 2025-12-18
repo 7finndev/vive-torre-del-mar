@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:json_annotation/json_annotation.dart';
+import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 
 part 'establishment_model.g.dart';
 
@@ -16,7 +17,6 @@ class EstablishmentModel extends HiveObject {
   @HiveField(7) @JsonKey(name: 'google_place_id') final String? googlePlaceId;
   @HiveField(8) final String? description;
   @HiveField(9) final String? phone;
-  @HiveField(10) final String? website;
   @HiveField(11) final String? schedule;
   @HiveField(12) @JsonKey(name: 'cover_image') final String? coverImage;
 
@@ -25,7 +25,17 @@ class EstablishmentModel extends HiveObject {
   @HiveField(14) @JsonKey(name: 'owner_phone') final String? ownerPhone;
   @HiveField(15) @JsonKey(name: 'owner_email') final String? ownerEmail;
   @HiveField(16, defaultValue: true) @JsonKey(name: 'is_partner') final bool isPartner;
+  
+  //RRSS:
+  @HiveField(10) final String? website;
   @HiveField(17) @JsonKey(name: 'social_tiktok') final String? socialTiktok;
+  @HiveField(18) @JsonKey(name: 'facebook') final String? facebook;
+  @HiveField(19) @JsonKey(name: 'instagram') final String? instagram;
+
+  @HiveField(20)
+  @JsonKey(includeToJson: false)                                                                                                                                                                      
+  final List<ProductModel>? products;
+  
 
   EstablishmentModel({
     required this.id,
@@ -47,6 +57,9 @@ class EstablishmentModel extends HiveObject {
     this.ownerEmail,
     this.isPartner = true, 
     this.socialTiktok,
+    this.facebook,
+    this.instagram,
+    this.products,
   });
 
   factory EstablishmentModel.fromJson(Map<String, dynamic> json) => 

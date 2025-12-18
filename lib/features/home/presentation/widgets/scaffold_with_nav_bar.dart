@@ -5,44 +5,30 @@ class ScaffoldWithNavBar extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
   const ScaffoldWithNavBar({
+    super.key,
     required this.navigationShell,
-    Key? key,
-  }) : super(key: key ?? const ValueKey('ScaffoldWithNavBar'));
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // El cuerpo es la pantalla actual (Home, Mapa, Pasaporte...)
-      body: navigationShell,
-      
-      // La barra inferior
+      body: navigationShell, // El cuerpo es la rama actual
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: (index) {
-          // Navegar a la rama correspondiente (con estado preservado)
+          // Navegar a la rama (tab) correspondiente
           navigationShell.goBranch(
             index,
+            // Soporte para ir al inicio de la rama si ya estás en ella
             initialLocation: index == navigationShell.currentIndex,
           );
         },
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Inicio',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map),
-            label: 'Mapa',
-          ),
-          NavigationDestination(icon: Icon(Icons.store), label: 'Locales'),
-          NavigationDestination(icon: Icon(Icons.restaurant_menu), label: 'Tapas'),
-          NavigationDestination(
-            icon: Icon(Icons.verified_outlined),
-            selectedIcon: Icon(Icons.verified),
-            label: 'Pasaporte',
-          ),
+          NavigationDestination(icon: Icon(Icons.home), label: 'Inicio'),
+          NavigationDestination(icon: Icon(Icons.map), label: 'Mapa'),
+          NavigationDestination(icon: Icon(Icons.qr_code), label: 'Pasaporte'),
+          NavigationDestination(icon: Icon(Icons.hub), label: 'Hub'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),
     );
