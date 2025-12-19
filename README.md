@@ -1,6 +1,3 @@
-# Vive Torre del Mar
-
-```markdown
 # 🍷 Vive Torre del Mar
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?style=for-the-badge&logo=flutter)
