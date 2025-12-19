@@ -1,16 +1,118 @@
 # Vive Torre del Mar
 
-A new Flutter project.
+```markdown
+# 🍷 Vive Torre del Mar
 
-## Getting Started
+![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?style=for-the-badge&logo=flutter)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green?style=for-the-badge&logo=supabase)
+![Riverpod](https://img.shields.io/badge/State-Riverpod_2.0-purple?style=for-the-badge)
 
-This project is a starting point for a Flutter application.
+Una solución integral multiplataforma (Móvil + Web/Desktop) para la gestión y participación digital en el evento gastronómico "Ruta de la Tapa" de Torre del Mar.
 
-A few resources to get you started if this is your first Flutter project:
+El proyecto digitaliza la experiencia tradicional del "Pasaporte de Tapas", permitiendo votaciones en tiempo real, validación de visitas mediante QR geolocalizado y un panel administrativo robusto.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+---
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 📱 Funcionalidades
+
+### 👤 Aplicación de Usuario (Móvil)
+Diseñada para los asistentes al evento.
+* **Pasaporte Digital:** Sellado virtual de visitas.
+* **Escáner QR Inteligente:** Valida la visita cruzando el código UUID del local con la ubicación GPS del usuario (Geo-fencing).
+* **Votaciones:** Valoración de tapas (0-5 estrellas) sincronizadas en tiempo real.
+* **Mapa Interactivo:** Visualización de establecimientos participantes con marcadores personalizados.
+* **Modo Offline:** Sincronización automática de votos cuando se recupera la conexión.
+
+### 🛠️ Panel de Administración (Web / Desktop)
+Herramienta de gestión para la ACET (Asociación de Comerciantes).
+* **Dashboard:** Métricas clave en tiempo real.
+* **Gestión de Socios:** CRUD completo de establecimientos con logos e información de contacto interna.
+* **Generador de QR:** Creación automática y descarga de carteles QR únicos para cada establecimiento.
+* **Gestión de Productos:** Asignación de tapas/cócteles a cada local.
+* **Seguridad:** Acceso restringido basado en roles (Row Level Security).
+
+---
+
+## 🏗️ Arquitectura Técnica
+
+El proyecto sigue una **Clean Architecture** basada en "Features" (Funcionalidades), asegurando que el código sea escalable, testeable y fácil de mantener.
+
+### Estructura de Carpetas
+```text
+lib/
+├── core/            # Utilidades compartidas, Router, Tema, Constantes
+├── features/        # Módulos funcionales
+│   ├── auth/        # Login y Gestión de Perfil
+│   ├── admin/       # Lógica del Panel Administrativo
+│   ├── home/        # Listados, Detalle de Tapas, Mapa
+│   ├── scan/        # Lógica de Cámara, QR y Geolocalización
+│   └── hub/         # Shell de navegación principal
+└── main.dart        # Punto de entrada
+
+```
+
+### Tecnologías Clave
+
+| Tecnología | Uso |
+| --- | --- |
+| **Flutter** | Framework UI para iOS, Android, Web y Desktop desde un solo código. |
+| **Riverpod** | Gestión de estado reactiva y segura (Providers, AsyncValue). |
+| **GoRouter** | Navegación declarativa avanzada (Rutas anidadas, Deep linking). |
+| **Supabase** | Backend-as-a-Service (Auth, Database PostgreSQL, Storage, Realtime). |
+| **Mobile Scanner** | Lectura nativa de códigos QR. |
+| **Geolocator** | Verificación de latitud/longitud para evitar fraudes en votos. |
+| **Hive** | Base de datos local para persistencia offline. |
+| **Google Fonts** | Tipografías personalizadas (Ubuntu/Lato). |
+
+---
+
+## 🚀 Instalación y Despliegue
+
+### Requisitos previos
+
+* Flutter SDK instalado.
+* Proyecto en Supabase configurado.
+
+### Configuración
+
+1. Clonar el repositorio:
+```bash
+git clone [https://github.com/tu-usuario/torre-del-mar-app.git](https://github.com/tu-usuario/torre-del-mar-app.git)
+
+```
+
+
+2. Instalar dependencias:
+```bash
+flutter pub get
+
+```
+
+
+3. Configurar variables de entorno (crear archivo `.env` o configurar en `main.dart`):
+```dart
+const supabaseUrl = 'TU_URL_SUPABASE';
+const supabaseKey = 'TU_KEY_SUPABASE';
+
+```
+
+
+4. Ejecutar la App:
+* **Móvil:** `flutter run` (Seleccionar emulador/dispositivo).
+* **Admin:** `flutter run -d chrome` o `flutter run -d macos/windows`.
+
+
+
+---
+
+## 🔮 Futuro del Proyecto
+
+El sistema está diseñado de forma **desacoplada**. Actualmente utiliza Supabase para una iteración rápida, pero la capa de datos (Repositorios) está preparada para migrar a una arquitectura basada en **WordPress + MySQL** mediante API REST si los requisitos del cliente lo exigen, sin necesidad de reescribir la interfaz de usuario.
+
+---
+
+**Desarrollado con ❤️ para Torre del Mar.**
+
+```
+
+```
