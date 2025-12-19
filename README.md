@@ -4,7 +4,8 @@
 ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green?style=for-the-badge&logo=supabase)
 ![Riverpod](https://img.shields.io/badge/State-Riverpod_2.0-purple?style=for-the-badge)
 
-Una solución integral multiplataforma (Móvil + Web/Desktop) para la gestión y participación digital en el evento gastronómico "Ruta de la Tapa" de Torre del Mar.
+Una solución integral multiplataforma (Móvil + Web/Desktop) para la gestión y participación digital en el evento gastronómico "Ruta de la Tapa" de Torre del Mar así como otros eventos.
+El proyecto se ha diseñado con propósito multi eventos, para gestionar distintos eventos ("Ruta de la Tapa", "Ruta del Coctel", "Ruta Gastronómica", "Sorteos", etc).
 
 El proyecto digitaliza la experiencia tradicional del "Pasaporte de Tapas", permitiendo votaciones en tiempo real, validación de visitas mediante QR geolocalizado y un panel administrativo robusto.
 
