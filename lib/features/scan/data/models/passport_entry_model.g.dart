@@ -8,7 +8,7 @@ part of 'passport_entry_model.dart';
 
 class PassportEntryModelAdapter extends TypeAdapter<PassportEntryModel> {
   @override
-  final int typeId = 2;
+  final int typeId = 4;
 
   @override
   PassportEntryModel read(BinaryReader reader) {

@@ -11,11 +11,8 @@ class PassportScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Referencias a las cajas de Hive
     final pendingBox = Hive.box(LocalDbService.pendingVotesBoxName);
     final syncedBox = Hive.box(LocalDbService.syncedStampsBoxName);
-    
-    // 2. Obtenemos el ID del evento actual desde el Provider
     final currentEventId = ref.watch(currentEventIdProvider);
 
     return Scaffold(
@@ -27,58 +24,69 @@ class PassportScreen extends ConsumerWidget {
       ),
       backgroundColor: Colors.grey[50],
       
-      // Listeners Anidados para refresco automático
-      body: ValueListenableBuilder(
-        valueListenable: pendingBox.listenable(),
-        builder: (context, Box boxPend, _) {
-          
-          return ValueListenableBuilder(
-            valueListenable: syncedBox.listenable(),
-            builder: (context, Box boxSync, _) {
-              
-              // A. Recoger TODOS los sellos (Pendientes + Sincronizados)
-              var allStamps = [...boxPend.values, ...boxSync.values].cast<PassportEntryModel>();
-              
-              // B. FILTRO ROBUSTO POR ID DE EVENTO
-              // Ahora es mucho más simple: solo miramos si el ID coincide.
-              final filteredStamps = allStamps.where((stamp) {
-                 return stamp.eventId == currentEventId;
-              }).toList();
-              
-              // C. Ordenar por fecha (más reciente primero)
-              filteredStamps.sort((a, b) => b.scannedAt.compareTo(a.scannedAt));
-
-              // D. Estado Vacío
-              if (filteredStamps.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.verified_outlined, size: 80, color: Colors.grey[300]),
-                      const SizedBox(height: 20),
-                      const Text(
-                        "Aún no tienes sellos en este evento",
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text("¡Ve a un bar y escanea su QR!"),
-                    ],
-                  ),
-                );
-              }
-
-              // E. Lista Filtrada
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: filteredStamps.length,
-                itemBuilder: (context, index) {
-                  final stamp = filteredStamps[index];
-                  return _StampCard(stamp: stamp);
-                },
-              );
-            },
-          );
+      // 🔥 REFRESH INDICATOR AÑADIDO
+      body: RefreshIndicator(
+        color: Colors.blue,
+        onRefresh: () async {
+          // Aquí podríamos llamar al servicio de sincronización (subir votos pendientes)
+          // Como no tengo tu SyncService aquí, pongo un delay para la animación.
+          await Future.delayed(const Duration(seconds: 1));
         },
+        child: ValueListenableBuilder(
+          valueListenable: pendingBox.listenable(),
+          builder: (context, Box boxPend, _) {
+            
+            return ValueListenableBuilder(
+              valueListenable: syncedBox.listenable(),
+              builder: (context, Box boxSync, _) {
+                
+                var allStamps = [...boxPend.values, ...boxSync.values].cast<PassportEntryModel>();
+                
+                final filteredStamps = allStamps.where((stamp) {
+                   return stamp.eventId == currentEventId;
+                }).toList();
+                
+                filteredStamps.sort((a, b) => b.scannedAt.compareTo(a.scannedAt));
+
+                if (filteredStamps.isEmpty) {
+                  // ListView scrollable para que funcione el gesto en vacío
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                      Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.verified_outlined, size: 80, color: Colors.grey[300]),
+                            const SizedBox(height: 20),
+                            const Text(
+                              "Aún no tienes sellos en este evento",
+                              style: TextStyle(fontSize: 16, color: Colors.grey),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text("¡Ve a un bar y escanea su QR!"),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                return ListView.builder(
+                  // 🔥 OBLIGATORIO: Physics scrollable
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredStamps.length,
+                  itemBuilder: (context, index) {
+                    final stamp = filteredStamps[index];
+                    return _StampCard(stamp: stamp);
+                  },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -138,7 +146,6 @@ class _StampCard extends StatelessWidget {
                     "Visado el: $dateStr",
                     style: TextStyle(color: Colors.grey[600], fontSize: 13),
                   ),
-                  // Mostrar Rating
                   if (stamp.rating > 0)
                      Text("Valoración: ${stamp.rating}⭐", style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.bold)),
                 ],

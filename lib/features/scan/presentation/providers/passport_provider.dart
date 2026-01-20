@@ -17,3 +17,19 @@ Future<List<PassportEntryModel>> passport(PassportRef ref, int eventId) async {
   // 2. Obtenemos los datos
   return repository.getPassportEntries(eventId);
 }
+
+
+@riverpod
+bool hasStamp(HasStampRef ref, {required int establishmentId, required int eventId}) {
+  // Escuchamos el provider principal que ya tienes creado
+  final passportAsync = ref.watch(passportProvider(eventId));
+  
+  return passportAsync.when(
+    data: (list) {
+      // Comprobamos si en la lista hay algún sello con ese ID de establecimiento
+      return list.any((entry) => entry.establishmentId == establishmentId);
+    },
+    error: (_, __) => false,
+    loading: () => false,
+  );
+}

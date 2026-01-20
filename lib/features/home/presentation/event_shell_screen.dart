@@ -32,13 +32,28 @@ class EventShellScreen extends ConsumerWidget {
     final eventAsync = ref.watch(currentEventProvider);
 
     String productLabel = "Tapas"; // Valor por defecto
+    IconData productIcon = Icons.local_dining_outlined; // Icono por defecto
+    IconData productIconSelected = Icons.local_dining;
     Color themeColor = Colors.orange; //Color por defecto.
 
     if (eventAsync.hasValue && eventAsync.value != null) {
       final event = eventAsync.value!;
-      final type = eventAsync.value!.type;
-      if (type == 'drinks') productLabel = "Cócteles";
-      if (type == 'shopping') productLabel = "Tiendas";
+      final type = event.type; // simplificado
+
+      // --- AQUÍ AÑADIMOS LA LÓGICA QUE FALTABA ---
+      if (type == 'menu') {
+        productLabel = "Menús"; // O "Carta"
+        productIcon = Icons.restaurant_menu_outlined; // Icono más apropiado
+        productIconSelected = Icons.restaurant_menu;
+      } else if (type == 'drinks' || type == 'cocktail') {
+        productLabel = "Cócteles";
+        productIcon = Icons.local_bar_outlined;
+        productIconSelected = Icons.local_bar;
+      } else if (type == 'shopping') {
+        productLabel = "Tiendas";
+        productIcon = Icons.shopping_bag_outlined;
+        productIconSelected = Icons.shopping_bag;
+      }
 
       try {
          themeColor = Color(int.parse(event.themeColorHex.replaceAll('#', '0xff')));
@@ -99,9 +114,9 @@ class EventShellScreen extends ConsumerWidget {
 
             // --- AQUÍ USAMOS LA VARIABLE ---
             NavigationDestination(
-              icon: const Icon(Icons.local_dining_outlined),
-              selectedIcon: const Icon(Icons.local_dining),
-              label: productLabel, // <--- Ahora sí existe
+              icon: Icon(productIcon), //const Icon(Icons.local_dining_outlined),
+              selectedIcon: Icon(productIconSelected), //const Icon(Icons.local_dining),
+              label: productLabel, 
             ),
 
             // ------------------------------

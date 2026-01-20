@@ -120,25 +120,66 @@ class _AdminEstablishmentsScreenState extends ConsumerState<AdminEstablishmentsS
             itemBuilder: (context, index) {
               final bar = filteredList[index];
               
+              // TRUCO ANTI-CACHÉ (Para que si cambias el logo se vea al instante)
+              final String? imageUrl = bar.coverImage != null 
+                  ? "${bar.coverImage!}?t=${DateTime.now().millisecondsSinceEpoch}"
+                  : null;
+              
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 elevation: 2,
                 child: ListTile(
-                  leading: CircleAvatar(
-                    // Ajustamos colores para que encajen mejor con naranja
-                    backgroundColor: bar.isPartner ? Colors.orange.shade100 : Colors.grey[200],
-                    child: Icon(
-                      Icons.store, 
-                      color: bar.isPartner ? Colors.orange[800] : Colors.grey
-                    ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  
+                  // --- AQUÍ ESTÁ EL CAMBIO DE IMAGEN ---
+                  leading: SizedBox(
+                    width: 60,  // Un poco más grande para que se vea bien
+                    height: 60,
+                    child: imageUrl != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8), // Bordes redondeados
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover, // <--- AQUÍ EVITAMOS EL ESTIRAMIENTO
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.broken_image, color: Colors.grey),
+                                );
+                              },
+                            ),
+                          )
+                        : CircleAvatar(
+                            backgroundColor: bar.isPartner ? Colors.orange.shade100 : Colors.grey[200],
+                            child: Icon(
+                              Icons.store, 
+                              color: bar.isPartner ? Colors.orange[800] : Colors.grey
+                            ),
+                          ),
                   ),
+                  // -------------------------------------
+
                   title: Text(
                     bar.name,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  subtitle: Text(bar.ownerName ?? bar.address ?? 'Sin datos'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(bar.ownerName ?? bar.address ?? 'Sin datos'),
+                      if (bar.isPartner)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green[100],
+                            borderRadius: BorderRadius.circular(4)
+                          ),
+                          child: const Text("Socio ACET", style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                        )
+                    ],
+                  ),
                   
-                  // ESTO ESTABA PERFECTO
                   onTap: (){
                     context.push('/admin/socios/detail', extra: bar);
                   },

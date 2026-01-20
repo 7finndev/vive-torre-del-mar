@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // UTILS
 import 'package:torre_del_mar_app/core/router/go_router_refresh_stream.dart'; // <--- NUEVO IMPORT
 import 'package:torre_del_mar_app/features/admin/presentation/admin_establishment_detail_screen.dart';
+import 'package:torre_del_mar_app/features/admin/presentation/admin_product_detail_screen.dart';
 
 // PROVIDERS
 import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart'; // <--- IMPORTANTE
@@ -28,7 +29,8 @@ import 'package:torre_del_mar_app/features/home/presentation/ranking_screen.dart
 import 'package:torre_del_mar_app/features/home/presentation/establishment_detail_screen.dart';
 import 'package:torre_del_mar_app/features/scan/presentation/scan_qr_screen.dart';
 import 'package:torre_del_mar_app/features/auth/presentation/profile_screen.dart';
-import 'package:torre_del_mar_app/features/auth/presentation/login_screen.dart'; // <--- NUEVO IMPORT
+import 'package:torre_del_mar_app/features/auth/presentation/login_screen.dart';
+import 'package:torre_del_mar_app/features/home/presentation/splash_screen.dart';
 
 // PANTALLAS ADMIN
 import 'package:torre_del_mar_app/features/admin/presentation/admin_shell_screen.dart';
@@ -50,7 +52,7 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>();
 GoRouter appRouter(AppRouterRef ref) {
   // 1. Escuchamos el estado de autenticación
   final authState = ref.watch(authStateProvider);
-
+  
   // 2. Obtenemos el STREAM (para usarlo en 'refreshListenable')
   // Nota el '.stream' al final
   final authStream = ref.watch(authStateProvider.stream);
@@ -65,7 +67,7 @@ GoRouter appRouter(AppRouterRef ref) {
   // Lógica de ruta inicial (manteniendo tu lógica)
   String getInitialRoute() {
     if (isDesktopOrWeb()) return '/admin';
-    return '/';
+    return '/splash';
   }
 
   return GoRouter(
@@ -134,6 +136,13 @@ GoRouter appRouter(AppRouterRef ref) {
       // =====================================================================
       // 🌍 ZONA PÚBLICA (MÓVIL)
       // =====================================================================
+      
+      // Ruta de Splash Screen:
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
+
       GoRoute(path: '/', builder: (context, state) => const HubScreen()),
 
       // MODO EVENTO (Con Barra Inferior)
@@ -302,11 +311,11 @@ GoRouter appRouter(AppRouterRef ref) {
                     path: 'nuevo',
                     builder: (_, __) => const EstablishmentFormScreen(),
                   ),
-                  
-                  // Sub-ruta 2: Detalle 
+
+                  // Sub-ruta 2: Detalle
                   // La URL final será: /admin/socios/detail
                   GoRoute(
-                    path: 'detail', 
+                    path: 'detail',
                     builder: (context, state) {
                       final establishment = state.extra as EstablishmentModel;
                       return AdminEstablishmentDetailScreen(
@@ -321,7 +330,9 @@ GoRouter appRouter(AppRouterRef ref) {
                     builder: (context, state) {
                       final establishment = state.extra as EstablishmentModel;
                       //Reutilizamos el formulario pero pasándole el objeto para editar
-                      return EstablishmentFormScreen(establishmentToEdit: establishment);
+                      return EstablishmentFormScreen(
+                        establishmentToEdit: establishment,
+                      );
                     },
                   ),
                 ],
@@ -356,6 +367,13 @@ GoRouter appRouter(AppRouterRef ref) {
                         initialEventId: eventId,
                         productToEdit: product,
                       );
+                    },
+                  ),
+                  GoRoute(
+                    path: 'detail', // URL: /admin/participaciones/detail
+                    builder: (context, state) {
+                      final product = state.extra as ProductModel;
+                      return AdminProductDetailScreen(product: product);
                     },
                   ),
                 ],

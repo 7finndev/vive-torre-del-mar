@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 // Imports de Modelos
 import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
+// IMPORTANTE: Necesitamos el modelo de establecimiento para el fallback
+import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 
 // Imports de Repositorios
 import 'package:torre_del_mar_app/features/home/data/repositories/event_repository.dart';
@@ -11,11 +14,11 @@ import 'package:torre_del_mar_app/features/home/data/repositories/product_reposi
 
 // Import del Provider
 import 'providers/admin_products_providers.dart';
+// IMPORTANTE: Importa el provider de la lista de establecimientos
+// (Ajusta la ruta si tu provider está en otro sitio, suele estar en home/presentation/providers)
+//import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart'; 
+import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
 
-// Import del Formulario
-import 'product_form_screen.dart'; 
-
-// CAMBIO 1: Convertir a StatefulWidget para manejar el texto de búsqueda
 class AdminProductsScreen extends ConsumerStatefulWidget {
   const AdminProductsScreen({super.key});
 
@@ -23,10 +26,8 @@ class AdminProductsScreen extends ConsumerStatefulWidget {
   ConsumerState<AdminProductsScreen> createState() => _AdminProductsScreenState();
 }
 
-// CAMBIO 2: Clase de Estado donde ocurre la magia
 class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
   
-  // Variables para el buscador
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchText = "";
 
@@ -38,17 +39,17 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Cargamos la lista de TODOS los eventos (para el Dropdown)
     final eventsAsync = ref.watch(adminEventsListProvider);
-    
-    // 2. Observamos el filtro seleccionado y la lista de productos resultante
     final selectedEvent = ref.watch(selectedEventFilterProvider);
     final productsAsync = ref.watch(adminProductsByEventProvider);
-
+    
+    // 1. NUEVO: Traemos la lista de bares para poder mostrar sus nombres
+    //final establishmentsAsync = ref.watch(establishmentsListProvider); 
+    final establishmentsAsync = ref.watch(adminAllEstablishmentsProvider);
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestión de Participaciones'),
-        // CAMBIO 3: Buscador en el AppBar
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
@@ -78,30 +79,26 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
         ),
       ),
       
-      // El botón de crear solo aparece si hay un evento seleccionado
+      // BOTÓN NUEVO PRODUCTO
       floatingActionButton: selectedEvent == null
           ? null
           : FloatingActionButton.extended(
               icon: const Icon(Icons.add),
               label: const Text('Nuevo Producto'),
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
               onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProductFormScreen(
-                      initialEventId: selectedEvent.id, 
-                    ),
-                  ),
+                await context.pushNamed(
+                  'product_form', 
+                  extra: {'eventId': selectedEvent.id},
                 );
-                ref.refresh(adminProductsByEventProvider);
+                ref.invalidate(adminProductsByEventProvider);
               },
             ),
       
       body: Column(
         children: [
-          // ---------------------------------------------
-          // ZONA SUPERIOR: FILTRO DE EVENTOS (DROPDOWN)
-          // ---------------------------------------------
+          // ZONA SUPERIOR: FILTRO DE EVENTOS (Igual que antes)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -114,7 +111,6 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
               data: (events) {
                 if (events.isEmpty) return const Text('Primero debes crear un Evento.');
                 
-                // LÓGICA DE AUTO-SELECCIÓN
                 if (selectedEvent == null) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                      try {
@@ -127,7 +123,6 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
                   });
                 }
 
-                // Valor seguro anti-crash
                 EventModel? safeValue;
                 if(selectedEvent != null){
                   try{
@@ -146,17 +141,8 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
                     fillColor: Colors.white,
                     contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
-                  initialValue: safeValue, // Usamos value, no initialValue para que reaccione a cambios
+                  initialValue: safeValue,
                   isExpanded: true,
-                  selectedItemBuilder: (BuildContext context) {
-                    return events.map<Widget>((EventModel event) {
-                      return Text(
-                        event.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
-                      );
-                    }).toList();
-                  },
                   items: events.map((event) {
                     return DropdownMenuItem(
                       value: event,
@@ -191,9 +177,7 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
             ),
           ),
 
-          // ---------------------------------------------
           // ZONA CENTRAL: LISTA DE PRODUCTOS
-          // ---------------------------------------------
           Expanded(
             child: selectedEvent == null
                 ? _buildEmptyState('👆 Selecciona un evento arriba')
@@ -201,11 +185,14 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
                     loading: () => const Center(child: CircularProgressIndicator()),
                     error: (err, stack) => Center(child: Text('Error: $err')),
                     data: (products) {
+                      
+                      // 2. NUEVO: Obtenemos la lista segura de bares
+                      final establishments = establishmentsAsync.value ?? [];
+
                       if (products.isEmpty) {
                         return _buildEmptyState('No hay productos en este evento.\n¡Añade la primera!');
                       }
 
-                      // CAMBIO 4: LÓGICA DE FILTRADO
                       final filteredProducts = products.where((p) {
                         return _searchText.isEmpty || 
                                p.name.toLowerCase().contains(_searchText);
@@ -217,14 +204,30 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
 
                       return ListView.builder(
                         padding: const EdgeInsets.only(bottom: 80, top: 8),
-                        itemCount: filteredProducts.length, // Usamos lista filtrada
+                        itemCount: filteredProducts.length,
                         itemBuilder: (context, index) {
-                          final product = filteredProducts[index]; // Usamos lista filtrada
+                          final product = filteredProducts[index];
+                          
+                          // 3. NUEVO: Buscamos el nombre del establecimiento usando el ID
+                          final establishment = establishments.firstWhere(
+                            (e) => e.id == product.establishmentId,
+                            orElse: () => EstablishmentModel(id: 0, name: "Local Desconocido (ID: ${product.establishmentId})", isActive: false, qrUuid: ''),
+                          );
+
+                          final String? imageUrl = product.imageUrl != null 
+                              ? "${product.imageUrl!}?t=${DateTime.now().millisecondsSinceEpoch}"
+                              : null;
+
                           return Card(
                             elevation: 2,
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              
+                              onTap: () {
+                                context.push('/admin/participaciones/detail', extra: product);
+                              },
+
                               // IMAGEN
                               leading: SizedBox(
                                 width: 50,
@@ -233,42 +236,66 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
                                 borderRadius: BorderRadius.circular(6),
                                 child: Container(
                                   color: Colors.grey[200],
-                                  child: product.imageUrl != null && product.imageUrl!.isNotEmpty
-                                      ? Image.network(product.imageUrl!, fit: BoxFit.cover)
+                                  child: imageUrl != null
+                                      ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.broken_image))
                                       : const Icon(Icons.fastfood, color: Colors.grey),
                                   ),
                                 ),
                               ),
                               
-                              // TÍTULO Y PRECIO
+                              // TÍTULO: Nombre de la Tapa
                               title: Text(
                                 product.name, 
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis
                               ),
-                              subtitle: Text(
-                                "${product.price?.toStringAsFixed(2) ?? '0.00'} €",
-                                style: TextStyle(color: Colors.green[700]),
+                              
+                              // 4. NUEVO: SUBTÍTULO CON NOMBRE DEL BAR
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  // Nombre del Bar con icono
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.store, size: 14, color: Colors.blueGrey),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          establishment.name, 
+                                          style: const TextStyle(
+                                            color: Colors.blueGrey, 
+                                            fontWeight: FontWeight.w600
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  // Precio
+                                  Text(
+                                    "${product.price?.toStringAsFixed(2) ?? '0.00'} €",
+                                    style: TextStyle(color: Colors.green[700], fontSize: 12),
+                                  ),
+                                ],
                               ),
                               
-                              // ACCIONES
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.edit, color: Colors.blue),
                                     onPressed: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ProductFormScreen(
-                                            productToEdit: product,
-                                            initialEventId: selectedEvent.id,
-                                          ),
-                                        ),
+                                      await context.pushNamed(
+                                        'product_form',
+                                        extra: {
+                                          'eventId': selectedEvent.id,
+                                          'productToEdit': product,
+                                        },
                                       );
-                                      ref.refresh(adminProductsByEventProvider);
+                                      ref.invalidate(adminProductsByEventProvider);
                                     },
                                   ),
                                   IconButton(
@@ -289,8 +316,7 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
     );
   }
 
-  // --- Widgets y Métodos Auxiliares ---
-
+  // ... (Tus métodos auxiliares _buildEmptyState, _getStatusColor, _confirmDelete siguen igual) ...
   Widget _buildEmptyState(String message) {
     return Center(
       child: Column(
@@ -330,7 +356,8 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
               Navigator.pop(ctx);
               try {
                 await ref.read(productRepositoryProvider).deleteProduct(product.id);
-                ref.refresh(adminProductsByEventProvider);
+                // Usamos invalidate para refrescar
+                ref.invalidate(adminProductsByEventProvider);
                 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -352,3 +379,8 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
     );
   }
 }
+// Este provider trae TODOS los bares, sin importar eventos activos/inactivos
+final adminAllEstablishmentsProvider = FutureProvider<List<EstablishmentModel>>((ref) async {
+  final repo = ref.watch(establishmentRepositoryProvider);
+  return repo.getAllEstablishments();
+});

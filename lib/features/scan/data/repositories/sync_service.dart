@@ -1,7 +1,9 @@
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/scan/data/models/passport_entry_model.dart';
+import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_provider.dart';
 
 class SyncService {
   final SupabaseClient _supabase;
@@ -15,31 +17,31 @@ class SyncService {
 
     final pendingBox = _localDb.pendingVotesBox;
     final syncedBox = _localDb.syncedStampsBox;
-    
-    // Ya no dependemos tanto de esta caja para los nombres, pero la mantenemos por si acaso
     final establishmentsBox = _localDb.establishmentsBox; 
 
     int uploadedCount = 0;
     final keysToDelete = <dynamic>[];
 
-    // ---------------------------------------------------------
-    // PASO 1: SUBIDA (Móvil -> Nube) - IGUAL QUE ANTES
-    // ---------------------------------------------------------
+    // =========================================================
+    // ⬆️ PASO 1: SUBIDA (Móvil -> Nube) 
+    // Buscamos en event_products (El PADRE)
+    // =========================================================
     for (var key in pendingBox.keys) {
       final entry = pendingBox.get(key) as PassportEntryModel;
 
       if (!entry.isSynced) {
         try {
-          // Buscamos el ID REAL del producto
+          // Buscamos el producto principal asociado al bar y al evento
           final productData = await _supabase
-              .from('event_products')
+              .from('event_products') 
               .select('id')
               .eq('establishment_id', entry.establishmentId)
               .eq('event_id', entry.eventId)
               .maybeSingle();
 
           if (productData == null) {
-            print("⚠️ Error: No existe tapa para el bar ${entry.establishmentName}");
+            print("⚠️ Error: No existe producto activo para el bar ${entry.establishmentName}");
+            // Si no existe el producto, no podemos asignar el voto. Lo descartamos.
             keysToDelete.add(key);
             continue;
           }
@@ -55,48 +57,54 @@ class SyncService {
             'rating': entry.rating, 
           });
 
-          // Movemos a sincronizados
+          // Mover a la caja de sincronizados
           final syncedEntry = PassportEntryModel(
              establishmentId: entry.establishmentId,
              establishmentName: entry.establishmentName,
              scannedAt: entry.scannedAt,
-             isSynced: true,
+             isSynced: true, // Marcamos como subido
              rating: entry.rating,
              eventId: entry.eventId,
           );
           
-          // Usamos la clave compuesta para guardar también al subir
           final String uniqueKey = "${entry.eventId}_${entry.establishmentId}";
           await syncedBox.put(uniqueKey, syncedEntry);
           
           keysToDelete.add(key);
           uploadedCount++;
+          print("✅ Voto sincronizado: ${entry.establishmentName}");
 
         } catch (e) {
-          print("⚠️ Error subiendo sello ${entry.establishmentName}: $e");
-          if (e.toString().contains("duplicate key")) {
+          print("⚠️ Error subiendo voto ${entry.establishmentName}: $e");
+          // Si es duplicado (ya votó antes), lo borramos de pendientes
+          if (e.toString().contains("duplicate key") || e.toString().contains("23505")) {
              keysToDelete.add(key);
           }
         }
       }
     }
+    // Borramos los pendientes procesados
     await pendingBox.deleteAll(keysToDelete);
 
 
-    // ---------------------------------------------------------
-    // PASO 2: BAJADA (Nube -> Móvil) CON TRADUCCIÓN MEJORADA
-    // ---------------------------------------------------------
+    // =========================================================
+    // ⬇️ PASO 2: BAJADA (Nube -> Móvil)
+    // Usamos la relación con event_products
+    // =========================================================
     try {
-      print("⬇️ Descargando historial de la nube...");
+      print("⬇️ Descargando historial...");
       
-      // --- CAMBIO CLAVE AQUÍ ---
-      // Pedimos:
-      // 1. Datos del pasaporte (*)
-      // 2. Datos del producto -> establishment_id
-      // 3. ¡Y DENTRO DEL PRODUCTO, DATOS DEL ESTABLECIMIENTO -> name!
+      // Consulta con Relación Anidada:
+      // passport_entries -> event_products -> establishments
       var query = _supabase
         .from('passport_entries')
-        .select('*, event_products(establishment_id, establishments(name))') 
+        .select('''
+          *,
+          product:event_products (
+            establishment_id,
+            establishment:establishments (name)
+          )
+        ''') 
         .eq('user_id', currentUser.id);
 
       if(targetEventId != null){
@@ -106,7 +114,7 @@ class SyncService {
       final response = await query;
       final List<dynamic> cloudEntries = response as List<dynamic>;
 
-      // Limpieza selectiva para evitar duplicados locales
+      // Limpiamos locales antiguos para evitar duplicados visuales
       if(targetEventId != null) {
         final keysToRemove = syncedBox.keys.where((key) {
           final entry = syncedBox.get(key);
@@ -122,64 +130,64 @@ class SyncService {
         final int rating = item['rating'] ?? 0;
         final int eventId = item['event_id'] ?? 1;
         
-        // EXTRAEMOS LOS DATOS ANIDADOS
-        final productData = item['event_products'];
+        // Extraemos datos anidados
+        final productData = item['product']; 
         
         int establishmentId = 0;
-        String cloudBarName = ""; // Nombre que viene de la nube
+        String cloudBarName = ""; 
 
         if (productData != null) {
            establishmentId = productData['establishment_id'];
            
-           // Extraemos el nombre desde la relación anidada
-           // 'establishments' puede ser un objeto o null
-           final establishmentData = productData['establishments'];
+           final establishmentData = productData['establishment'];
            if (establishmentData != null) {
              cloudBarName = establishmentData['name'] ?? "";
            }
         } else {
-           establishmentId = item['product_id']; 
+           // Si falla la relación (datos corruptos antiguos), usamos el ID directo
+           establishmentId = item['product_id'] ?? 0;
         }
 
-        // LÓGICA DE NOMBRE:
-        // 1. Prioridad: Nombre que viene de la nube (funciona para eventos pasados).
-        // 2. Fallback: Buscar en caja local (funciona para evento activo si falla nube).
-        // 3. Último recurso: "ID: 123".
-        
+        // Buscamos nombre bonito
         String finalBarName = cloudBarName;
-
         if (finalBarName.isEmpty) {
-          // Si la nube no trajo nombre, intentamos local
            try {
              final match = establishmentsBox.values.cast<EstablishmentModel>().firstWhere(
                (e) => e.id == establishmentId,
              );
              finalBarName = match.name;
            } catch (_) {
-             finalBarName = "ID: $establishmentId";
+             finalBarName = "Local #$establishmentId";
            }
         }
 
         final downloadedEntry = PassportEntryModel(
           establishmentId: establishmentId,
-          establishmentName: finalBarName, // ¡Aquí ya va el nombre correcto!
+          establishmentName: finalBarName, 
           scannedAt: DateTime.parse(scannedAtStr),
           isSynced: true,
           rating: rating,
           eventId: eventId,
         );
 
-        // Clave única compuesta para soportar múltiples eventos
         final String uniqueKey = "${eventId}_$establishmentId";
         await syncedBox.put(uniqueKey, downloadedEntry);
       }
       
-      print("✅ Sincronización completada. Total: ${cloudEntries.length}");
+      print("✅ Sincronización completada. ${cloudEntries.length} votos recuperados.");
 
     } catch (e) {
-      print("⚠️ Error descargando de la nube: $e");
+      print("⚠️ Error bajando historial: $e");
     }
 
     return uploadedCount;
   }
+}
+
+@riverpod
+SyncService syncService(SyncServiceRef ref) {
+  return SyncService(
+    Supabase.instance.client,
+    ref.watch(localDbServiceProvider), 
+  );
 }

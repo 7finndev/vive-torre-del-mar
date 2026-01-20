@@ -1,8 +1,19 @@
+import 'dart:typed_data'; // Para manejar bytes de imagen
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:torre_del_mar_app/core/utils/image_picker_widget.dart';
+import 'package:google_fonts/google_fonts.dart'; // <--- NECESARIO
+import 'package:image_picker/image_picker.dart'; // <--- USAMOS EL PAQUETE ESTÁNDAR
+import 'package:uuid/uuid.dart'; // Para generar nombres de archivo
 import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/event_repository.dart';
+
+// LISTA CURADA DE FUENTES DE GOOGLE (Para no saturar al usuario)
+const List<String> _googleFontsList = [
+  'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Oswald', 
+  'Raleway', 'Poppins', 'Ubuntu', 'Merriweather', 'Playfair Display',
+  'Nunito', 'Rubik', 'Work Sans', 'Quicksand', 'Karla',
+  'Lobster', 'Pacifico', 'Dancing Script', 'Shadows Into Light', 'Indie Flower'
+];
 
 const Map<String, String> _statusMap = {
   'upcoming': '🔜 Próximamente',
@@ -26,11 +37,17 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
   final _navColorController = TextEditingController(text: '#FFFFFF');
   final _bgColorController = TextEditingController(text: '#F5F5F5');
   final _textColorController = TextEditingController(text: '#000000');
-  final _fontFamilyController = TextEditingController(text: 'Roboto');
   
-  // --- CONTROLADORES DE IMAGEN ---
+  // YA NO USAMOS CONTROLADOR PARA FUENTE, USAMOS VARIABLE DE ESTADO
+  String _selectedFont = 'Roboto';
+  
+  // CONTROLADORES DE URL (Para mostrar lo que hay guardado)
   final _logoUrlController = TextEditingController(); 
-  final _bgImageUrlController = TextEditingController(); // <--- NUEVO: Para el fondo
+  final _bgImageUrlController = TextEditingController();
+
+  // VARIABLES PARA IMÁGENES NUEVAS (EN MEMORIA)
+  Uint8List? _newLogoBytes;
+  Uint8List? _newBgBytes;
 
   final _priceController = TextEditingController(text: '0.0');
 
@@ -47,32 +64,52 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       final e = widget.eventToEdit!;
       _nameController.text = e.name;
       _themeColorController.text = e.themeColorHex;
+      _bgColorController.text = e.bgColorHex ?? '#F5F5F5';
+      _navColorController.text = e.navColorHex ?? '#FFFFFF';
+      _textColorController.text = e.textColorHex ?? '#000000';
       _priceController.text = e.basePrice?.toString() ?? '0.0';
       
-      // CARGAMOS AMBAS IMÁGENES
       _logoUrlController.text = e.logoUrl ?? '';
-      _bgImageUrlController.text = e.bgImageUrl ?? ''; // <--- CARGAMOS FONDO
+      _bgImageUrlController.text = e.bgImageUrl ?? '';
+
+      // Cargar fuente guardada o defecto
+      if (_googleFontsList.contains(e.fontFamily)) {
+        _selectedFont = e.fontFamily ?? 'Roboto';
+      } else {
+        _selectedFont = 'Roboto';
+      }
 
       // Normalización de Estado
       String incomingStatus = e.status.toLowerCase().trim();
       if (_statusMap.containsKey(incomingStatus)) {
         _selectedStatus = incomingStatus;
       } else {
-        if (incomingStatus.contains('prox')) {
-          _selectedStatus = 'upcoming';
-        } else if (incomingStatus == 'activo') _selectedStatus = 'active';
-        else _selectedStatus = 'archived';
+        _selectedStatus = incomingStatus == 'activo' ? 'active' : 'upcoming';
       }
 
       // Normalización de Tipo
-      String incomingType = e.type;
-      if (incomingType == 'drink') incomingType = 'drinks';
-      if (incomingType == 'tapas') incomingType = 'gastronomic';
       const validTypes = ['gastronomic', 'drinks', 'shopping', 'menu'];
-      _selectedType = validTypes.contains(incomingType) ? incomingType : 'gastronomic';
+      _selectedType = validTypes.contains(e.type) ? e.type : 'gastronomic';
 
       _startDate = e.startDate;
       _endDate = e.endDate;
+    }
+  }
+
+  // --- SELECCIÓN DE IMÁGENES (Clean Architecture) ---
+  Future<void> _pickImage(bool isLogo) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      setState(() {
+        if (isLogo) {
+          _newLogoBytes = bytes;
+        } else {
+          _newBgBytes = bytes;
+        }
+      });
     }
   }
 
@@ -92,7 +129,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
           key: _formKey,
           child: ListView(
             children: [
-              // SECCIÓN 1: DATOS PRINCIPALES
+              // --- SECCIÓN 1: DATOS ---
               const Text('Información General', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 10),
               TextFormField(
@@ -110,7 +147,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                       decoration: const InputDecoration(labelText: 'Tipo', border: OutlineInputBorder()),
                       items: const [
                         DropdownMenuItem(value: 'gastronomic', child: Text('🥘 Tapas')),
-                        DropdownMenuItem(value: 'menu', child: Text('🍽️ Menú Gastronómico')),
+                        DropdownMenuItem(value: 'menu', child: Text('🍽️ Menú')),
                         DropdownMenuItem(value: 'drinks', child: Text('🍹 Cócteles')),
                         DropdownMenuItem(value: 'shopping', child: Text('🛍️ Tiendas')),
                       ],
@@ -130,81 +167,55 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
               ),
               const SizedBox(height: 24),
 
-              // ==========================================
-              // SECCIÓN IMÁGENES (CORREGIDA)
-              // ==========================================
+              // --- SECCIÓN 2: IMÁGENES (Clean) ---
               const Text('Imágenes del Evento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 16),
               
-              // 1. SELECTOR DE LOGOTIPO
-              const Text('Logotipo (Icono pequeño)', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              ImagePickerWidget(
-                bucketName: 'events',
-                initialUrl: _logoUrlController.text.isNotEmpty ? _logoUrlController.text : null,
-                onImageUploaded: (url) {
-                  setState(() => _logoUrlController.text = url);
-                },
-              ),
-              if (_logoUrlController.text.isNotEmpty)
-                 Padding(
-                   padding: const EdgeInsets.only(top: 5, bottom: 20),
-                   child: Text("✅ Logo cargado: ...${_logoUrlController.text.substring(_logoUrlController.text.length - 15)}", style: const TextStyle(fontSize: 10, color: Colors.green)),
-                 ),
-
+              // LOGO
+              _buildImagePickerZone("Logotipo (Icono)", true, _newLogoBytes, _logoUrlController.text),
               const SizedBox(height: 20),
-
-              // 2. SELECTOR DE FONDO (CARTEL) - ¡NUEVO!
-              const Text('Imagen de Fondo / Cartel (Grande)', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              ImagePickerWidget(
-                bucketName: 'events',
-                initialUrl: _bgImageUrlController.text.isNotEmpty ? _bgImageUrlController.text : null,
-                onImageUploaded: (url) {
-                  setState(() => _bgImageUrlController.text = url); // Guardamos en el controller del fondo
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Fondo subido correctamente')));
-                },
-              ),
-              // Preview del fondo
-              if (_bgImageUrlController.text.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Container(
-                    height: 150, // Más grande para ver bien el fondo
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                      image: DecorationImage(
-                        image: NetworkImage(_bgImageUrlController.text),
-                        fit: BoxFit.cover, // Para ver cómo queda de fondo
-                      ),
-                    ),
-                  ),
-                ),
-              // ==========================================
-
+              // FONDO
+              _buildImagePickerZone("Fondo / Cartel", false, _newBgBytes, _bgImageUrlController.text),
+              
               const SizedBox(height: 32),
 
-              // SECCIÓN DISEÑO
+              // --- SECCIÓN 3: DISEÑO Y FUENTES ---
               const Text('Diseño y Branding', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 16),
-              _ColorInput(label: 'Color Principal (Tema)', controller: _themeColorController),
+              _ColorInput(label: 'Color Principal', controller: _themeColorController),
               const SizedBox(height: 10),
-              _ColorInput(label: 'Color Fondo App', controller: _bgColorController),
+              _ColorInput(label: 'Color Fondo', controller: _bgColorController),
               const SizedBox(height: 10),
-              _ColorInput(label: 'Color Barra Navegación', controller: _navColorController),
-              const SizedBox(height: 10),
-              _ColorInput(label: 'Color de Texto', controller: _textColorController),
+              _ColorInput(label: 'Color Texto', controller: _textColorController),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _fontFamilyController,
-                decoration: const InputDecoration(labelText: 'Tipografía', border: OutlineInputBorder(), prefixIcon: Icon(Icons.text_fields)),
+              
+              // >>>>> EL DROPDOWN DE FUENTES <<<<<
+              const Text("Tipografía", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              const SizedBox(height: 5),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedFont,
+                decoration: const InputDecoration(border: OutlineInputBorder(), filled: true, fillColor: Colors.white),
+                items: _googleFontsList.map((font) {
+                  return DropdownMenuItem(
+                    value: font,
+                    child: Text(font, style: GoogleFonts.getFont(font)), // Previsualización
+                  );
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedFont = val!),
+              ),
+              // Preview del nombre con la fuente
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  _nameController.text.isEmpty ? "Ejemplo de Título" : _nameController.text,
+                  style: GoogleFonts.getFont(_selectedFont, fontSize: 24, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
               ),
 
               const SizedBox(height: 32),
 
-              // SECCIÓN FECHAS
+              // --- SECCIÓN 4: FECHAS ---
               const Text('Configuración', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 10),
               ListTile(
@@ -219,7 +230,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
               ),
               TextFormField(
                 controller: _priceController,
-                decoration: const InputDecoration(labelText: 'Precio', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'Precio Base', border: OutlineInputBorder()),
                 keyboardType: TextInputType.number,
               ),
 
@@ -241,7 +252,75 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
     );
   }
 
-  // Helper de Color
+  // WIDGET AUXILIAR PARA SELECCIONAR IMAGEN
+  /*
+  Widget _buildImagePickerZone(String title, bool isLogo, Uint8List? newBytes, String currentUrl) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Container(
+          height: 120,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade400),
+          ),
+          child: newBytes != null
+              ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(newBytes, fit: BoxFit.cover))
+              : (currentUrl.isNotEmpty
+                  ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(currentUrl, fit: BoxFit.cover))
+                  : Center(child: Icon(isLogo ? Icons.emoji_events : Icons.image, size: 40, color: Colors.grey))),
+        ),
+        const SizedBox(height: 5),
+        ElevatedButton.icon(
+          onPressed: () => _pickImage(isLogo),
+          icon: const Icon(Icons.upload_file, size: 18),
+          label: Text(newBytes != null ? "Cambiar Selección" : "Seleccionar Imagen"),
+        ),
+      ],
+    );
+  }
+  */
+  Widget _buildImagePickerZone(String title, bool isLogo, Uint8List? newBytes, String currentUrl) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Container(
+          height: 120,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade400),
+          ),
+          child: newBytes != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  // 👇 CAMBIO AQUÍ: Si es logo usamos contain, si no cover
+                  child: Image.memory(newBytes, fit: isLogo ? BoxFit.contain : BoxFit.cover),
+                )
+              : (currentUrl.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      // 👇 CAMBIO AQUÍ TAMBIÉN
+                      child: Image.network(currentUrl, fit: isLogo ? BoxFit.contain : BoxFit.cover),
+                    )
+                  : Center(child: Icon(isLogo ? Icons.emoji_events : Icons.image, size: 40, color: Colors.grey))),
+        ),
+        const SizedBox(height: 5),
+        ElevatedButton.icon(
+          onPressed: () => _pickImage(isLogo),
+          icon: const Icon(Icons.upload_file, size: 18),
+          label: Text(newBytes != null ? "Cambiar Selección" : "Seleccionar Imagen"),
+        ),
+      ],
+    );
+  }
   Widget _ColorInput({required String label, required TextEditingController controller}) {
     return Row(
       children: [
@@ -284,11 +363,42 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
   Future<void> _saveEvent() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // --- NUEVA VALIDACIÓN DE FECHAS ---
+    // Si la fecha de fin es ANTES que la de inicio, mostramos error y paramos.
+    if (_endDate.isBefore(_startDate)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("⚠️ La fecha de fin no puede ser anterior al inicio."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return; // DETENEMOS EL GUARDADO
+    }
+    // ----------------------------------
+    
     setState(() => _isLoading = true);
 
     try {
+      final repo = ref.read(eventRepositoryProvider);
       final generatedSlug = _generateSlug(_nameController.text);
       final price = double.tryParse(_priceController.text) ?? 0.0;
+      
+      String? finalLogoUrl = _logoUrlController.text.isNotEmpty ? _logoUrlController.text : null;
+      String? finalBgUrl = _bgImageUrlController.text.isNotEmpty ? _bgImageUrlController.text : null;
+
+      // 1. SUBIR LOGO SI HAY NUEVO
+      if (_newLogoBytes != null) {
+         final name = 'logo_${const Uuid().v4()}.jpg';
+         // ASUMIENDO QUE TIENES ESTE MÉTODO EN EL REPO (Cópialo del EstablishmentRepo)
+         finalLogoUrl = await repo.uploadEventImage(name, _newLogoBytes!); 
+      }
+
+      // 2. SUBIR FONDO SI HAY NUEVO
+      if (_newBgBytes != null) {
+         final name = 'bg_${const Uuid().v4()}.jpg';
+         finalBgUrl = await repo.uploadEventImage(name, _newBgBytes!);
+      }
 
       final newEvent = EventModel(
         id: widget.eventToEdit?.id ?? 0,
@@ -298,20 +408,15 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
         bgColorHex: _bgColorController.text,
         navColorHex: _navColorController.text,
         textColorHex: _textColorController.text,
-        fontFamily: _fontFamilyController.text,
+        fontFamily: _selectedFont, // GUARDAMOS LA SELECCIÓN
         type: _selectedType,
         status: _selectedStatus,
         startDate: _startDate,
         endDate: _endDate,
         basePrice: price,
-
-        // --- CORRECCIÓN FINAL ---
-        // Ahora guardamos CADA imagen en su sitio correcto
-        logoUrl: _logoUrlController.text.isNotEmpty ? _logoUrlController.text : null,
-        bgImageUrl: _bgImageUrlController.text.isNotEmpty ? _bgImageUrlController.text : null,
+        logoUrl: finalLogoUrl,
+        bgImageUrl: finalBgUrl,
       );
-
-      final repo = ref.read(eventRepositoryProvider);
 
       if (widget.eventToEdit == null) {
         await repo.createEvent(newEvent);
@@ -322,6 +427,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       if (mounted) {
         ref.refresh(adminEventsListProvider);
         Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Evento Guardado")));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));

@@ -3,8 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart'; 
-import 'package:font_awesome_flutter/font_awesome_flutter.dart'; 
+import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 // MODELOS
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
@@ -17,8 +17,12 @@ import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_prov
 
 // WIDGETS Y REPOS
 import 'package:torre_del_mar_app/features/scan/presentation/widgets/star_rating_selector.dart';
-// IMPORTANTE: Nuestro componente de imagen inteligente
 import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
+
+// --- NUEVO IMPORT ---
+import 'package:torre_del_mar_app/features/home/presentation/widgets/menu_product_view.dart';
+import 'package:share_plus/share_plus.dart';
+// --------------------
 
 class EstablishmentDetailScreen extends ConsumerWidget {
   final EstablishmentModel establishment;
@@ -32,7 +36,9 @@ class EstablishmentDetailScreen extends ConsumerWidget {
     bool isTel = false,
   }) async {
     if (urlString == null || urlString.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dato no disponible")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Dato no disponible")));
       return;
     }
     final Uri uri = isTel
@@ -53,10 +59,13 @@ class EstablishmentDetailScreen extends ConsumerWidget {
 
   Future<void> _openMap(BuildContext context) async {
     if (establishment.latitude == null || establishment.longitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ubicación no disponible")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Ubicación no disponible")));
       return;
     }
-    final url = "http://googleusercontent.com/maps.google.com/maps?q=${establishment.latitude},${establishment.longitude}";
+    final url =
+        "http://googleusercontent.com/maps.google.com/maps?q=${establishment.latitude},${establishment.longitude}";
     _launchSocial(context, url);
   }
 
@@ -67,21 +76,21 @@ class EstablishmentDetailScreen extends ConsumerWidget {
     final eventAsync = ref.watch(currentEventProvider);
 
     // 2. ESTADO DEL EVENTO
-    String eventStatus = 'active'; 
+    String eventStatus = 'active';
     int currentEventId = 1;
     double? basePrice;
 
     if (eventAsync.hasValue && eventAsync.value != null) {
-      eventStatus = eventAsync.value!.status; 
+      eventStatus = eventAsync.value!.computedStatus; //.status;
       currentEventId = eventAsync.value!.id;
       basePrice = eventAsync.value!.basePrice;
     }
 
     // 3. BUSCAR TAPA DE ESTE LOCAL
-    ProductModel? tapa;
+    ProductModel? product;
     if (productsAsync.hasValue) {
       try {
-        tapa = productsAsync.value!.firstWhere(
+        product = productsAsync.value!.firstWhere(
           (p) => p.establishmentId == establishment.id,
         );
       } catch (_) {}
@@ -97,13 +106,16 @@ class EstablishmentDetailScreen extends ConsumerWidget {
 
     // 5. PRECIO
     String priceText = "";
-    if (tapa != null) {
-      final double? price = tapa.price ?? basePrice;
+    if (product != null) {
+      final double? price = product.price ?? basePrice;
       if (price != null) priceText = "${price.toStringAsFixed(2)} €";
     }
 
     // Lógica de disponibilidad
-    final bool isTapaAvailable = tapa?.isAvailable ?? true;
+    final bool isProductAvailable = product?.isAvailable ?? true;
+
+    //Deteccióin de tipo
+    final bool isMenu = product != null && product.items.isNotEmpty;
 
     return Scaffold(
       body: CustomScrollView(
@@ -161,13 +173,20 @@ class EstablishmentDetailScreen extends ConsumerWidget {
                       _ActionButton(
                         icon: Icons.call,
                         label: "Llamar",
-                        onTap: () => _launchSocial(context, establishment.phone, isTel: true),
+                        onTap: () => _launchSocial(
+                          context,
+                          establishment.phone,
+                          isTel: true,
+                        ),
                       ),
                       _ActionButton(
                         icon: Icons.language,
                         label: "Web",
-                        color: establishment.website != null ? Colors.orange : Colors.grey,
-                        onTap: () => _launchSocial(context, establishment.website),
+                        color: establishment.website != null
+                            ? Colors.orange
+                            : Colors.grey,
+                        onTap: () =>
+                            _launchSocial(context, establishment.website),
                       ),
                       _ActionButton(
                         icon: Icons.directions,
@@ -184,7 +203,11 @@ class EstablishmentDetailScreen extends ConsumerWidget {
                       establishment.socialTiktok != null) ...[
                     const Text(
                       "Síguenos en redes",
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -193,19 +216,24 @@ class EstablishmentDetailScreen extends ConsumerWidget {
                           _SocialButton(
                             icon: FontAwesomeIcons.facebook,
                             color: const Color(0xFF1877F2),
-                            onTap: () => _launchSocial(context, establishment.facebook),
+                            onTap: () =>
+                                _launchSocial(context, establishment.facebook),
                           ),
                         if (establishment.instagram != null)
                           _SocialButton(
                             icon: FontAwesomeIcons.instagram,
                             color: const Color(0xFFE4405F),
-                            onTap: () => _launchSocial(context, establishment.instagram),
+                            onTap: () =>
+                                _launchSocial(context, establishment.instagram),
                           ),
                         if (establishment.socialTiktok != null)
                           _SocialButton(
                             icon: FontAwesomeIcons.tiktok,
                             color: Colors.black,
-                            onTap: () => _launchSocial(context, establishment.socialTiktok),
+                            onTap: () => _launchSocial(
+                              context,
+                              establishment.socialTiktok,
+                            ),
                           ),
                       ],
                     ),
@@ -225,7 +253,11 @@ class EstablishmentDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Icon(Icons.access_time, size: 20, color: Colors.orange),
+                      const Icon(
+                        Icons.access_time,
+                        size: 20,
+                        color: Colors.orange,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -238,297 +270,324 @@ class EstablishmentDetailScreen extends ConsumerWidget {
 
                   const Divider(height: 40),
 
-                  // --- C. TARJETA DE LA TAPA/PRODUCTO ---
+                  // --- C. TARJETA DE PRODUCTO ---
                   const Text(
                     "Propuesta Gastronómica",
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
 
-                  // Control de opacidad si está agotada
-                  Opacity(
-                    opacity: isTapaAvailable ? 1.0 : 0.6,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 4)),
-                        ],
-                        // Borde verde si ya está visado
-                        border: hasStamp ? Border.all(color: Colors.green, width: 2) : null,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          
-                          // 1. BANNER GANADOR (DINÁMICO)
-                          if (tapa?.isWinner == true)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFFFD700),
-                                borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.emoji_events, color: Colors.black87, size: 20),
-                                  const SizedBox(width: 8),
-                                  // Texto adaptativo
-                                  Flexible(
-                                    child: Text(
-                                      eventAsync.value != null 
-                                          ? "GANADOR - ${eventAsync.value!.name.toUpperCase()}"
-                                          : "GANADOR DE LA EDICIÓN",
-                                      style: const TextStyle(
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 13,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                  // LÓGICA DE VISUALIZACIÓN (Menú vs Tapa)
+                  if (isMenu)
+                    // OPCIÓN 1: MENÚ ESTILO PLEX
+                    MenuProductView(product: product)
+                  else
+                    // OPCIÓN 2: TAPA CLÁSICA
+                    Opacity(
+                      opacity: isProductAvailable ? 1.0 : 0.6,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
                             ),
-
-                          // 2. FOTO DE LA TAPA
-                          SizedBox(
-                            height: 220,
-                            width: double.infinity,
-                            child: Stack(
-                              children: [
-                                ClipRRect(
-                                  // Si tiene banner arriba, no redondeamos esquinas superiores
-                                  borderRadius: tapa?.isWinner == true
-                                      ? BorderRadius.zero
-                                      : const BorderRadius.vertical(top: Radius.circular(14)),
-                                  child: ColorFiltered(
-                                    // Filtro B/N si no disponible
-                                    colorFilter: isTapaAvailable
-                                        ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
-                                        : const ColorFilter.matrix(<double>[
-                                            0.2126, 0.7152, 0.0722, 0, 0,
-                                            0.2126, 0.7152, 0.0722, 0, 0,
-                                            0.2126, 0.7152, 0.0722, 0, 0,
-                                            0, 0, 0, 1, 0,
-                                          ]),
-                                    // IMAGEN MEJORADA
-                                    child: SmartImageContainer(
-                                      imageUrl: tapa?.imageUrl,
-                                      borderRadius: 0, // ClipRRect se encarga del borde
-                                    ),
+                          ],
+                          border: hasStamp
+                              ? Border.all(color: Colors.green, width: 2)
+                              : null,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. BANNER GANADOR
+                            if (product?.isWinner == true)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFFD700),
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(14),
                                   ),
                                 ),
-                                // Capa negra "AGOTADO"
-                                if (!isTapaAvailable)
-                                  Positioned.fill(
-                                    child: Container(
-                                      color: Colors.black38,
-                                      child: const Center(
-                                        child: Text(
-                                          "AGOTADO / NO DISPONIBLE",
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 18,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Nombre y Precio
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Expanded(
+                                    const Icon(
+                                      Icons.emoji_events,
+                                      color: Colors.black87,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Flexible(
                                       child: Text(
-                                        tapa?.name ?? "Cargando...",
-                                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                                        eventAsync.value != null
+                                            ? "GANADOR - ${eventAsync.value!.name.toUpperCase()}"
+                                            : "GANADOR",
+                                        style: const TextStyle(
+                                          color: Colors.black87,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 13,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    if (priceText.isNotEmpty)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.orange.shade50,
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          priceText,
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            color: Colors.orange.shade800,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  tapa?.description ?? "...",
-                                  style: TextStyle(color: Colors.grey[800], fontSize: 15),
-                                ),
+                              ),
 
-                                // Ingredientes
-                                if (tapa?.ingredients != null && tapa!.ingredients!.isNotEmpty) ...[
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    "Ingredientes:",
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[600]),
-                                  ),
-                                  Text(
-                                    tapa.ingredients!,
-                                    style: const TextStyle(color: Colors.black54, fontStyle: FontStyle.italic),
-                                  ),
-                                ],
-
-                                // Alérgenos
-                                if (tapa?.allergens != null && tapa!.allergens!.isNotEmpty) ...[
-                                  const SizedBox(height: 16),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: tapa.allergens!.map((l) => _AllergenChip(label: l)).toList(),
-                                  ),
-                                ],
-
-                                const SizedBox(height: 20),
-
-                                // --- CAJA DE VALORACIONES ---
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[50],
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.grey.shade200),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                    children: [
-                                      if (hasStamp) ...[
-                                        Column(
-                                          children: [
-                                            const Text("TU VOTO", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                                            const SizedBox(height: 4),
-                                            Row(
-                                              children: const [
-                                                Icon(Icons.star, color: Colors.amber, size: 18),
-                                                SizedBox(width: 4),
-                                                Text("Completado", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)), 
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                        Container(width: 1, height: 30, color: Colors.grey[300]), 
-                                      ],
-                                      Column(
-                                        children: [
-                                          const Text("VALORACIÓN MEDIA", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: const [
-                                              Icon(Icons.star, color: Colors.orange, size: 18),
-                                              SizedBox(width: 4),
-                                              // TODO: Conectar valor real del backend
-                                              Text("4.8", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                              Text("/5", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                                            ],
+                            // 2. FOTO
+                            SizedBox(
+                              height: 220,
+                              width: double.infinity,
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: product?.isWinner == true
+                                        ? BorderRadius.zero
+                                        : const BorderRadius.vertical(
+                                            top: Radius.circular(14),
                                           ),
-                                        ],
+                                    child: ColorFiltered(
+                                      colorFilter: isProductAvailable
+                                          ? const ColorFilter.mode(
+                                              Colors.transparent,
+                                              BlendMode.dst,
+                                            )
+                                          : const ColorFilter.matrix(<double>[
+                                              0.2126,
+                                              0.7152,
+                                              0.0722,
+                                              0,
+                                              0,
+                                              0.2126,
+                                              0.7152,
+                                              0.0722,
+                                              0,
+                                              0,
+                                              0.2126,
+                                              0.7152,
+                                              0.0722,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              1,
+                                              0,
+                                            ]),
+                                      child: SmartImageContainer(
+                                        imageUrl: product?.imageUrl,
+                                        borderRadius: 0,
                                       ),
+                                    ),
+                                  ),
+                                  if (!isProductAvailable)
+                                    Positioned.fill(
+                                      child: Container(
+                                        color: Colors.black38,
+                                        child: const Center(
+                                          child: Text(
+                                            "AGOTADO",
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 18,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+
+                            // 3. INFO DE LA TAPA
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          product?.name ?? "Cargando...",
+                                          style: const TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      if (priceText.isNotEmpty)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.shade50,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            priceText,
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              color: Colors.orange.shade800,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
-                                ),
+                                  // Resto de info (descripción, ingredientes, alergenos...)
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    product?.description ?? "...",
+                                    style: TextStyle(
+                                      color: Colors.grey[800],
+                                      fontSize: 15,
+                                    ),
+                                  ),
 
-                                const SizedBox(height: 24),
-                                
-                                // --- BOTÓN DE ACCIÓN (ESCANEAR) ---
-                                Builder(
-                                  builder: (context) {
-                                    String label = "ESCANEAR CÓDIGO";
-                                    IconData icon = Icons.qr_code_scanner;
-                                    Color btnColor = Colors.orange;
-                                    VoidCallback? action;
-
-                                    if (!isTapaAvailable) {
-                                      label = "NO DISPONIBLE";
-                                      icon = Icons.block;
-                                      btnColor = Colors.grey;
-                                      action = null;
-                                    } else if (hasStamp) {
-                                      label = "¡VISADO!";
-                                      icon = Icons.check_circle;
-                                      btnColor = Colors.green;
-                                      action = () => ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text("¡Ya completado!"), backgroundColor: Colors.green),
-                                      );
-                                    } else if (eventStatus == 'upcoming') {
-                                      label = "PRÓXIMAMENTE";
-                                      icon = Icons.calendar_today;
-                                      btnColor = Colors.blue;
-                                      action = () => ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text("Este evento aún no ha comenzado.")),
-                                      );
-                                    } else if (eventStatus == 'archived') {
-                                      label = "EVENTO FINALIZADO";
-                                      icon = Icons.history;
-                                      btnColor = Colors.grey;
-                                      action = null;
-                                    } else {
-                                      // ACTIVO
-                                      action = () async {
-                                        final bool? result = await context.push<bool>('/scan', extra: establishment);
-                                        if (result == true && context.mounted) {
-                                          _showVotingDialog(context, ref, establishment, currentEventId);
-                                        }
-                                      };
-                                    }
-
-                                    return SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton.icon(
-                                        onPressed: action,
-                                        icon: Icon(icon),
-                                        label: Text(label),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: btnColor,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 12),
-                                          elevation: action == null ? 0 : 4,
-                                        ),
+                                  if (product?.ingredients != null &&
+                                      product!.ingredients!.isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      "Ingredientes:",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey[600],
                                       ),
-                                    );
-                                  },
-                                ),
-                              ],
+                                    ),
+                                    Text(
+                                      product.ingredients!,
+                                      style: const TextStyle(
+                                        color: Colors.black54,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+
+                                  if (product?.allergens != null &&
+                                      product!.allergens!.isNotEmpty) ...[
+                                    const SizedBox(height: 16),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: product.allergens!
+                                          .map((l) => _AllergenChip(label: l))
+                                          .toList(),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
+
+                  const SizedBox(height: 24),
+
+                  // --- D. BOTÓN DE ESCANEAR / VOTAR ---
+                  Builder(
+                    builder: (context) {
+                      String label = "ESCANEAR CÓDIGO";
+                      IconData icon = Icons.qr_code_scanner;
+                      Color btnColor = Colors.orange;
+                      VoidCallback? action;
+
+                      if (!isProductAvailable) {
+                        label = "NO DISPONIBLE";
+                        icon = Icons.block;
+                        btnColor = Colors.grey;
+                        action = null;
+                      } else if (hasStamp) {
+                        label = "¡VISADO!";
+                        icon = Icons.check_circle;
+                        btnColor = Colors.green;
+                        action = () =>
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("¡Ya completado!"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                      } else if (eventStatus == 'upcoming') {
+                        label = "PRÓXIMAMENTE";
+                        icon = Icons.calendar_today;
+                        btnColor = Colors.blue;
+                        action = () =>
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "Este evento aún no ha comenzado.",
+                                ),
+                              ),
+                            );
+                      } else if (eventStatus == 'archived') {
+                        label = "EVENTO FINALIZADO";
+                        icon = Icons.history;
+                        btnColor = Colors.grey;
+                        action = null;
+                      } else {
+                        action = () async {
+                          final bool? result = await context.push<bool>(
+                            '/scan',
+                            extra: establishment,
+                          );
+                          if (result == true && context.mounted) {
+                            _showVotingDialog(
+                              context,
+                              ref,
+                              establishment,
+                              currentEventId,
+                            );
+                          }
+                        };
+                      }
+
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: action,
+                          icon: Icon(icon),
+                          label: Text(label),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: btnColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            elevation: action == null ? 0 : 4,
+                          ),
+                        ),
+                      );
+                    },
                   ),
 
                   const Divider(height: 40),
 
                   // --- MAPA ---
-                  const Text("Ubicación", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text(
+                    "Ubicación",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 12),
-                  if (establishment.latitude != null && establishment.longitude != null)
+                  if (establishment.latitude != null &&
+                      establishment.longitude != null)
                     Container(
                       height: 200,
                       decoration: BoxDecoration(
@@ -539,17 +598,32 @@ class EstablishmentDetailScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(16),
                         child: FlutterMap(
                           options: MapOptions(
-                            initialCenter: LatLng(establishment.latitude!, establishment.longitude!),
+                            initialCenter: LatLng(
+                              establishment.latitude!,
+                              establishment.longitude!,
+                            ),
                             initialZoom: 16.0,
-                            interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                            interactionOptions: const InteractionOptions(
+                              flags: InteractiveFlag.none,
+                            ),
                           ),
                           children: [
-                            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                            TileLayer(
+                              urlTemplate:
+                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            ),
                             MarkerLayer(
                               markers: [
                                 Marker(
-                                  point: LatLng(establishment.latitude!, establishment.longitude!),
-                                  child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                                  point: LatLng(
+                                    establishment.latitude!,
+                                    establishment.longitude!,
+                                  ),
+                                  child: const Icon(
+                                    Icons.location_on,
+                                    color: Colors.red,
+                                    size: 40,
+                                  ),
                                 ),
                               ],
                             ),
@@ -570,7 +644,14 @@ class EstablishmentDetailScreen extends ConsumerWidget {
 
 // --- WIDGETS AUXILIARES ---
 
-void _showVotingDialog(BuildContext context, WidgetRef ref, EstablishmentModel establishment, int eventId) {
+// --- WIDGETS AUXILIARES ---
+
+void _showVotingDialog(
+  BuildContext context,
+  WidgetRef ref,
+  EstablishmentModel establishment,
+  int eventId,
+) {
   int rating = 0;
   showDialog(
     context: context,
@@ -593,21 +674,35 @@ void _showVotingDialog(BuildContext context, WidgetRef ref, EstablishmentModel e
             onPressed: rating == 0
                 ? null
                 : () async {
-                    Navigator.pop(context);
-                    await ref.read(passportRepositoryProvider).saveStamp(
+                    // 1. CERRAR EL DIÁLOGO DE ESTRELLAS
+                    Navigator.pop(context); 
+
+                    // 2. GUARDAR EN BD
+                    await ref
+                        .read(passportRepositoryProvider)
+                        .saveStamp(
                           establishmentId: establishment.id,
                           establishmentName: establishment.name,
                           gpsVerified: true,
                           rating: rating,
                           eventId: eventId,
                         );
-                    ref.invalidate(hasStampProvider(establishmentId: establishment.id, eventId: eventId));
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("¡Visado guardado!"), backgroundColor: Colors.green),
-                      );
-                    }
+                    
+                    // 3. ACTUALIZAR ESTADO LOCAL
+                    ref.invalidate(
+                      hasStampProvider(
+                        establishmentId: establishment.id,
+                        eventId: eventId,
+                      ),
+                    );
+
+                    // 4. SINCRONIZAR EN SEGUNDO PLANO
                     ref.read(syncServiceProvider).syncPendingVotes(targetEventId: eventId);
+
+                    // 5. ✨ MOSTRAR EL DIÁLOGO DE COMPARTIR (NUEVO)
+                    if (context.mounted) {
+                      _showSuccessAndShareDialog(context, establishment.name, rating);
+                    }
                   },
             child: const Text("GUARDAR VISADO"),
           ),
@@ -617,11 +712,73 @@ void _showVotingDialog(BuildContext context, WidgetRef ref, EstablishmentModel e
   );
 }
 
+// --- NUEVA FUNCIÓN PARA COMPARTIR ---
+void _showSuccessAndShareDialog(BuildContext context, String barName, int rating) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Column(
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 60),
+          const SizedBox(height: 10),
+          const Text("¡Voto Guardado!", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          Text(
+            "Has dado $rating estrellas ⭐", 
+            style: const TextStyle(fontSize: 14, color: Colors.grey)
+          ),
+        ],
+      ),
+      content: const Text(
+        "Tu visita ha quedado registrada en el Pasaporte.\n¿Quieres compartirlo con tus amigos?",
+        textAlign: TextAlign.center,
+      ),
+      actionsAlignment: MainAxisAlignment.center, // Centrados
+      actions: [
+        // BOTÓN SALIR (Gris/Simple)
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text("Salir", style: TextStyle(color: Colors.grey)),
+        ),
+        
+        const SizedBox(width: 10),
+
+        // BOTÓN COMPARTIR (Verde/Llamativo) 🚀
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green, 
+            foregroundColor: Colors.white,
+            elevation: 2,
+          ),
+          icon: const Icon(Icons.share, size: 18),
+          label: const Text("Compartir"),
+          onPressed: () {
+            final String stars = "⭐" * rating;
+            final String message = "¡Acabo de probar la tapa de *$barName* en la Ruta de la Tapa! 🥘😋\n\nMi valoración: $rating/5 $stars\n\nDescarga la App y participa: www.torredelmar.org";
+            
+            // Lanza el menú nativo del móvil
+            Share.share(message);
+            
+            // Cerramos el diálogo tras pulsar compartir
+            Navigator.pop(ctx); 
+          },
+        ),
+      ],
+    ),
+  );
+}
+
 class _SocialButton extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-  const _SocialButton({required this.icon, required this.color, required this.onTap});
+  const _SocialButton({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -647,7 +804,12 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final Color color;
-  const _ActionButton({required this.icon, required this.label, required this.onTap, this.color = Colors.orange});
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color = Colors.orange,
+  });
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -661,7 +823,14 @@ class _ActionButton extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.black54,
+          ),
+        ),
       ],
     );
   }
@@ -681,7 +850,11 @@ class _AllergenChip extends StatelessWidget {
       ),
       child: Text(
         label.toUpperCase(),
-        style: TextStyle(color: Colors.orange[900], fontSize: 11, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          color: Colors.orange[900],
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

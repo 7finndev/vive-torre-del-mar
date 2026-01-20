@@ -5,7 +5,7 @@ import 'package:json_annotation/json_annotation.dart';
 part 'passport_entry_model.g.dart';
 
 @JsonSerializable()
-@HiveType(typeId: 2) // ID 2 (0 era Establishment, 1 era Event)
+@HiveType(typeId: 4) // ID 2 (0 era Establishment, 1 era Event)
 class PassportEntryModel extends HiveObject {
   @HiveField(0)
   final String establishmentName; // Guardamos el nombre para mostrarlo fácil

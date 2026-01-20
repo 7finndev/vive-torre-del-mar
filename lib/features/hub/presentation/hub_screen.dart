@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:torre_del_mar_app/features/scan/presentation/providers/passport_provider.dart';
+import 'package:torre_del_mar_app/core/utils/event_type_helper.dart';
 import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -11,7 +11,6 @@ import 'package:torre_del_mar_app/core/constants/app_data.dart';
 import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/event_repository.dart';
-import 'package:torre_del_mar_app/features/home/presentation/widgets/sponsor_logo.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
 import 'package:torre_del_mar_app/features/hub/data/news_service.dart';
@@ -93,7 +92,7 @@ class _HubScreenState extends ConsumerState<HubScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          "ÚLTIMAS NOTICIAS",
+                          "DESTACADOS",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
@@ -747,6 +746,9 @@ class _HubEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 1. RECUPERAMOS LA APARIENCIA (Color, Texto, Icono)
+    final appearance = EventTypeHelper.getAppearance(event.type);
+
     return GestureDetector(
       onTap: () => context.go('/event/${event.id}/dashboard'),
 
@@ -768,22 +770,28 @@ class _HubEventCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
+              // IMAGEN DE FONDO
               SmartImageContainer(imageUrl: event.bgImageUrl, borderRadius: 0),
+              
+              // DEGRADADO (Para que se lea el texto)
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.9)],
                   ),
                 ),
               ),
+              
+              // TEXTOS Y ETIQUETA
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // TÍTULO DEL EVENTO
                     Text(
                       event.name.toUpperCase(),
                       style: const TextStyle(
@@ -793,24 +801,34 @@ class _HubEventCard extends StatelessWidget {
                         shadows: [Shadow(color: Colors.black, blurRadius: 4)],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.calendar_today,
-                          color: Colors.white70,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          "${event.startDate.day}/${event.startDate.month} - ${event.endDate.day}/${event.endDate.month}",
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
+                    const SizedBox(height: 8),
+
+                    // --- AQUÍ ESTABA LA FECHA, AHORA PONEMOS LA ETIQUETA ---
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: appearance.color, // Color dinámico (Naranja, Morado...)
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min, // Ocupa solo lo necesario
+                        children: [
+                          Icon(appearance.icon, color: Colors.white, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            appearance.label.toUpperCase(), // "RUTA DE LA TAPA", etc.
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    // -------------------------------------------------------
                   ],
                 ),
               ),
@@ -821,7 +839,6 @@ class _HubEventCard extends StatelessWidget {
     );
   }
 }
-
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;

@@ -1,11 +1,11 @@
+import 'dart:typed_data'; // <--- IMPORTANTE: Necesario para Uint8List
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart'; // Importante para el provider
+import 'package:riverpod_annotation/riverpod_annotation.dart'; 
 import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 
-// Línea necesaria para la generación de código de Riverpod
 part 'establishment_repository.g.dart';
 
 class EstablishmentRepository {
@@ -14,8 +14,39 @@ class EstablishmentRepository {
 
   EstablishmentRepository(this._supabase, this._localDb);
 
+  // ====================================================================
+  // 📸 NUEVO MÉTODO: SUBIR IMAGEN (STORAGE)
+  // ====================================================================
+  
+  /// Sube una imagen al bucket 'establishments' y devuelve la URL PÚBLICA.
+  Future<String> uploadEstablishmentImage(String fileName, Uint8List fileBytes) async {
+    try {
+      final path = 'establishments/$fileName'; // Ej: establishments/bar-pepe.jpg
+
+      // 1. Subir el archivo binario
+      // 'upsert: true' permite sobrescribir si ya existe un archivo con ese nombre
+      await _supabase.storage.from('establishment').uploadBinary(
+            path,
+            fileBytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+
+      // 2. Obtener la URL PÚBLICA (Soluciona el error 400 y problemas de caché)
+      // Asegúrate de que el bucket sea "Public" en el panel de Supabase.
+      final publicUrl = _supabase.storage.from('establishment').getPublicUrl(path);
+
+      return publicUrl;
+    } catch (e) {
+      print("⚠️ Error subiendo imagen: $e");
+      throw Exception("Error al subir la imagen al servidor.");
+    }
+  }
+
+  // ====================================================================
+  // 📱 MÉTODOS DE LECTURA (APP)
+  // ====================================================================
+
   /// 1. READ (APP): Obtiene la lista de bares activos para un evento.
-  /// Lógica: Intenta Nube -> Si falla/Offline -> Usa Caché Local
   Future<List<EstablishmentModel>> getEstablishments({required int eventId}) async {
     final connectivityResult = await Connectivity().checkConnectivity();
     final hasInternet = !connectivityResult.contains(ConnectivityResult.none);
@@ -23,19 +54,16 @@ class EstablishmentRepository {
     if (hasInternet) {
       try {
         print('🏘️ Bajando Bares del Evento $eventId...');
-        // A. Petición a Supabase (Vista filtrada)
         final response = await _supabase
             .from('event_establishments_view')
             .select()
             .eq('event_id', eventId);
 
-        // Convertir JSON a Objetos
         final List<EstablishmentModel> list = (response as List)
             .map((e) => EstablishmentModel.fromJson(e))
             .toList();
 
         if (list.isNotEmpty) {
-           // B. Guardar en Hive (Caché)
            await _localDb.establishmentsBox.clear();
            await _localDb.establishmentsBox.addAll(list);
         }
@@ -69,7 +97,6 @@ class EstablishmentRepository {
             .map((e) => ProductModel.fromJson(e))
             .toList();
 
-        // Guardar en Hive
         await _localDb.productsBox.clear();
         await _localDb.productsBox.addAll(list);
         
@@ -122,23 +149,15 @@ class EstablishmentRepository {
 
   /// 4. CREATE (ADMIN): Crea un nuevo establecimiento
   Future<void> createEstablishment(EstablishmentModel establishment) async {
-    // Convertimos a JSON
     final data = establishment.toJson();
-    
-    // IMPORTANTE: Eliminamos el ID para que Supabase lo genere automáticamente
     data.remove('id'); 
-
-    // Insertamos
     await _supabase.from('establishments').insert(data);
   }
 
   /// 5. UPDATE (ADMIN): Actualiza un establecimiento existente
   Future<void> updateEstablishment(EstablishmentModel establishment) async {
     final data = establishment.toJson();
-    
-    // Quitamos el ID del cuerpo de datos a actualizar, 
-    // pero lo usamos en la cláusula .eq() para saber cuál actualizar
-    data.remove('id');
+    data.remove('id'); // No actualizamos el ID
 
     await _supabase
         .from('establishments')
@@ -150,22 +169,11 @@ class EstablishmentRepository {
   Future<void> deleteEstablishment(int id) async {
     await _supabase.from('establishments').delete().eq('id', id);
   }
-
 }
-
-// ====================================================================
-// 💉 PROVIDER (Riverpod)
-// ====================================================================
 
 @riverpod
 EstablishmentRepository establishmentRepository(EstablishmentRepositoryRef ref) {
-  // 1. Obtenemos el cliente de Supabase
   final supabase = Supabase.instance.client;
-  
-  // 2. Obtenemos la instancia ÚNICA de LocalDbService
-  // (Debes importar local_db_service.dart)
   final localDb = ref.watch(localDbServiceProvider);
-
-  // 3. Inyectamos ambos
   return EstablishmentRepository(supabase, localDb);
 }

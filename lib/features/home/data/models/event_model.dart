@@ -20,6 +20,24 @@ class EventModel extends HiveObject {
   @JsonKey(name: 'status', defaultValue: 'archived')
   final String status;
 
+  // GETTER INTELIGENTE
+  String get computedStatus {
+    final now = DateTime.now();
+
+    // Si la fecha actual es ANTES del inicio -> 'upcoming'
+    if (now.isBefore(startDate)) {
+      return 'upcoming';
+    }
+
+    // Si la fecha actual es DESPUÉS del fin -> 'archived'
+    if (now.isAfter(endDate)) {
+      return 'archived';
+    }
+
+    // Si estamos en medio -> 'active'
+    return 'active';
+  }
+
   @HiveField(4)
   @JsonKey(name: 'theme_color_hex', defaultValue: '#FF9800')
   final String themeColorHex;
@@ -49,9 +67,9 @@ class EventModel extends HiveObject {
   final String slug;
 
   // --- NUEVOS CAMPOS DE DISEÑO (Índices 11-14) ---
-  
+
   @HiveField(11)
-  @JsonKey(name: 'bg_color') 
+  @JsonKey(name: 'bg_color')
   final String? bgColorHex; // Color de fondo de la app
 
   @HiveField(12)
@@ -65,11 +83,11 @@ class EventModel extends HiveObject {
   @HiveField(14)
   @JsonKey(name: 'font_family')
   final String? fontFamily; // Nombre de la fuente (ej: 'Roboto')
-  
+
   // ------------------------------------------------
 
   // Helper Visual
-  bool get isActive => status == 'active';
+  bool get isActive => computedStatus == 'active';
 
   EventModel({
     required this.id,

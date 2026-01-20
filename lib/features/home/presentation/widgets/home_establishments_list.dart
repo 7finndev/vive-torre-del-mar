@@ -66,9 +66,10 @@ class _EstablishmentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
             // FOTO
             CachedNetworkImage(
-              imageUrl:
+              imageUrl: bar.coverImage ??
                   'https://images.pexels.com/photos/1307698/pexels-photo-1307698.jpeg?auto=compress&cs=tinysrgb&w=400',
               // AÑADIR ESTAS DOS LÍNEAS DE OPTIMIZACIÓN:
               memCacheWidth: 200, // Reduce uso de RAM drásticamente

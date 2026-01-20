@@ -2,30 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart'; // <--- NUEVA LIBRERÍA
+import 'package:torre_del_mar_app/core/utils/qr_download_widget.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
-import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/product_repository.dart';
 
 // Provider auxiliar
-final productsByEstablishmentProvider = FutureProvider.family.autoDispose<List<ProductModel>, int>((ref, establishmentId) async {
-  final allProducts = await ref.read(productRepositoryProvider).getAllProducts();
-  return allProducts.where((p) => p.establishmentId == establishmentId).toList();
-});
+final productsByEstablishmentProvider = FutureProvider.family
+    .autoDispose<List<ProductModel>, int>((ref, establishmentId) async {
+      final allProducts = await ref
+          .read(productRepositoryProvider)
+          .getAllProducts();
+      return allProducts
+          .where((p) => p.establishmentId == establishmentId)
+          .toList();
+    });
 
 class AdminEstablishmentDetailScreen extends ConsumerWidget {
   final EstablishmentModel establishment;
 
-  const AdminEstablishmentDetailScreen({super.key, required this.establishment});
+  const AdminEstablishmentDetailScreen({
+    super.key,
+    required this.establishment,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final productsAsync = ref.watch(productsByEstablishmentProvider(establishment.id));
+    final productsAsync = ref.watch(
+      productsByEstablishmentProvider(establishment.id),
+    );
 
     // TRUCO ANTI-CACHÉ:
-    // Añadimos un timestamp al final de la URL. Esto fuerza a Flutter a 
+    // Añadimos un timestamp al final de la URL. Esto fuerza a Flutter a
     // volver a descargar la imagen si acabamos de subirla.
-    final String? imageUrl = establishment.coverImage != null 
+    final String? imageUrl = establishment.coverImage != null
         ? "${establishment.coverImage!}?t=${DateTime.now().millisecondsSinceEpoch}"
         : null;
 
@@ -57,14 +67,36 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
                       // Loading builder para que se vea bonito mientras refresca
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
-                        return Center(child: CircularProgressIndicator(value: loadingProgress.expectedTotalBytes != null ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! : null));
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        );
                       },
-                      errorBuilder: (context, error, stackTrace) => 
-                          const Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey)),
+                      errorBuilder: (context, error, stackTrace) {
+                        //=>
+                        print("Error cargando imagen: $error");
+                        return const Center(
+                          child: Icon(
+                            Icons.broken_image,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
+                        );
+                      },
                     )
                   : Container(
                       color: Colors.orange.shade100,
-                      child: const Center(child: Icon(Icons.store, size: 60, color: Colors.orange)),
+                      child: const Center(
+                        child: Icon(
+                          Icons.store,
+                          size: 60,
+                          color: Colors.orange,
+                        ),
+                      ),
                     ),
             ),
 
@@ -74,21 +106,30 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // DATOS PROPIETARIO
-                  Text("Datos del Propietario", style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    "Datos del Propietario",
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 10),
                   Card(
                     elevation: 0,
                     color: Colors.grey[50],
                     shape: RoundedRectangleBorder(
-                        side: BorderSide(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8)),
+                      side: BorderSide(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(12.0),
                       child: Column(
                         children: [
                           ListTile(
-                            leading: const Icon(Icons.person, color: Colors.grey),
-                            title: Text(establishment.ownerName ?? "Nombre no registrado"),
+                            leading: const Icon(
+                              Icons.person,
+                              color: Colors.grey,
+                            ),
+                            title: Text(
+                              establishment.ownerName ?? "Nombre no registrado",
+                            ),
                             subtitle: const Text("Propietario / Gerente"),
                             contentPadding: EdgeInsets.zero,
                             dense: true,
@@ -97,34 +138,55 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
                           Row(
                             children: [
                               Expanded(
-                                child: Row(children: [
-                                  const Icon(Icons.phone_android, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 8),
-                                  Text(establishment.ownerPhone ?? "-"),
-                                ])
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.phone_android,
+                                      size: 16,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(establishment.ownerPhone ?? "-"),
+                                  ],
+                                ),
                               ),
                               Expanded(
-                                child: Row(children: [
-                                  const Icon(Icons.email, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: Text(establishment.ownerEmail ?? "-", overflow: TextOverflow.ellipsis)),
-                                ])
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.email,
+                                      size: 16,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        establishment.ownerEmail ?? "-",
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
-                          )
+                          ),
                         ],
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 30),
 
                   // ZONA DE TAPAS
-                  Text("Historial de Productos", style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    "Historial de Productos",
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 10),
 
                   productsAsync.when(
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
                     error: (e, _) => Text("Error cargando tapas: $e"),
                     data: (products) {
                       if (products.isEmpty) {
@@ -133,26 +195,34 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(10)
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Text("Sin productos registrados.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                          child: const Text(
+                            "Sin productos registrados.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey),
+                          ),
                         );
                       }
                       return ListView.separated(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: products.length,
-                        separatorBuilder: (_,__) => const Divider(),
+                        separatorBuilder: (_, __) => const Divider(),
                         itemBuilder: (context, index) {
                           final prod = products[index];
                           return ListTile(
                             leading: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: SizedBox(
-                                width: 50, height: 50,
-                                child: prod.imageUrl != null 
-                                  ? Image.network(prod.imageUrl!, fit: BoxFit.cover)
-                                  : const Icon(Icons.fastfood),
+                                width: 50,
+                                height: 50,
+                                child: prod.imageUrl != null
+                                    ? Image.network(
+                                        prod.imageUrl!,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : const Icon(Icons.fastfood),
                               ),
                             ),
                             title: Text(prod.name),
@@ -165,14 +235,17 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
 
                   const SizedBox(height: 30),
                   const Divider(),
-                  
+
                   // =======================================================
                   // 🚀 ZONA QR MEJORADA (REAL + GRANDE)
                   // =======================================================
                   const SizedBox(height: 10),
-                  const Text("Código QR Oficial", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const Text(
+                    "Código QR Oficial",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
                   const SizedBox(height: 10),
-                  
+                  /*
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
@@ -226,6 +299,41 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  */
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      children: [
+                        // AQUÍ USAMOS TU NUEVO WIDGET
+                        QrDownloadSection(
+                          dataContent: establishment.qrUuid,
+                          establishmentName: establishment.name,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Información de texto (Opcional, pero útil tenerla visible)
+                        const Text(
+                          "Identificador UUID:",
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                        SelectableText(
+                          establishment.qrUuid,
+                          style: const TextStyle(
+                            fontFamily: 'Courier',
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 50),
                 ],
               ),
@@ -248,11 +356,17 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 20),
               Container(
                 decoration: BoxDecoration(
-                  border: Border.all(width: 5, color: Colors.black)
+                  border: Border.all(width: 5, color: Colors.black),
                 ),
                 child: QrImageView(
                   data: data,
@@ -261,14 +375,20 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              Text(data, style: const TextStyle(fontFamily: 'Courier', fontSize: 18)),
+              Text(
+                data,
+                style: const TextStyle(fontFamily: 'Courier', fontSize: 18),
+              ),
               const SizedBox(height: 20),
-              const Text("Haz una captura de pantalla o clic derecho -> Guardar imagen", textAlign: TextAlign.center),
+              const Text(
+                "Haz una captura de pantalla o clic derecho -> Guardar imagen",
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text("Cerrar"),
-              )
+              ),
             ],
           ),
         ),

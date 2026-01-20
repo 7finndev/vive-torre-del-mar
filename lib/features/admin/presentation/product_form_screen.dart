@@ -5,9 +5,9 @@ import 'package:torre_del_mar_app/core/utils/image_picker_widget.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
-import 'package:torre_del_mar_app/features/home/data/repositories/product_repository.dart';
+import 'package:torre_del_mar_app/features/admin/presentation/controllers/product_form_controller.dart';
 
-// Lista constante de alérgenos comunes
+// Lista constante de alérgenos
 const List<String> _commonAllergens = [
   'Gluten', 'Lácteos', 'Huevo', 'Frutos Secos', 'Marisco', 'Pescado', 'Soja',
   'Apio', 'Mostaza', 'Sulfitos', 'Altramuces', 'Moluscos', 'Otros',
@@ -38,8 +38,12 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _nameController = TextEditingController();
   final _descController = TextEditingController(); 
   final _ingredientsController = TextEditingController();
-  final _priceController = TextEditingController(text: '0.0');
+  final _priceController = TextEditingController(text: '0.0'); 
   final _imageUrlController = TextEditingController();
+
+  // 🔥 1. AQUÍ ESTABA EL ERROR: FALTABA DECLARAR ESTA VARIABLE
+  bool _hasInitializedPrice = false; 
+  // ---------------------------------------------------------
 
   bool _useImageUpload = true;
   int? _selectedEstablishmentId;
@@ -49,11 +53,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   bool _isWinner = false;
   List<String> _selectedAllergens = [];
 
-  bool _isLoading = false;
-
   @override
   void initState() {
     super.initState();
+    // CARGA DE DATOS BÁSICOS SI ES EDICIÓN
     if (widget.productToEdit != null) {
       final p = widget.productToEdit!;
       _nameController.text = p.name;
@@ -66,352 +69,452 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       _isAvailable = p.isAvailable;
       _isWinner = p.isWinner;
       _selectedAllergens = List.from(p.allergens ?? []);
+
+      if (p.items.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(productFormControllerProvider.notifier).loadInitialItems(p.items);
+        });
+      }
     }
+  }
+  
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descController.dispose();
+    _ingredientsController.dispose();
+    _priceController.dispose();
+    _imageUrlController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final establishmentsAsync = ref.watch(establishmentsListProvider);
+    final formState = ref.watch(productFormControllerProvider);
+    
+    // Obtenemos el evento para saber el tipo (menú/tapa) y AHORA EL PRECIO BASE
+    final eventAsync = ref.watch(eventDetailsProvider(widget.initialEventId));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.productToEdit != null ? 'Editar Producto' : 'Nuevo Producto'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              const SizedBox(height: 20),
-              // 1. Selector de Establecimiento (AHORA CON BUSCADOR)
-              establishmentsAsync.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (e, _) => const Text('Error cargando locales'),
-                data: (establishments) {
-                  return DropdownSearch<EstablishmentModel>(
-                    // --- CORRECCIÓN 1: 'items' ahora pide una función, no una lista ---
-                    // Además, en la versión nueva hay que hacer el filtro manualmente aquí.
-                    items: (filter, loadProps) {
-                       // Si no escribe nada, devolvemos todos
-                       if (filter.isEmpty) return establishments;
-                       
-                       // Si escribe, filtramos la lista por nombre
-                       return establishments.where((element) => 
-                           element.name.toLowerCase().contains(filter.toLowerCase())
-                       ).toList();
-                    },
+      body: eventAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, s) => Center(child: Text("Error cargando evento: $e")),
+        data: (event) {
+          
+          // 🔥 2. LÓGICA CORREGIDA DE PRECIO AUTOMÁTICO 🔥
+          // Si es un producto NUEVO y aún no hemos puesto el precio automático
+          if (widget.productToEdit == null && !_hasInitializedPrice) {
+             WidgetsBinding.instance.addPostFrameCallback((_) {
+               // Usamos .basePrice porque así se llama en tu modelo EventModel
+               if (event.basePrice != null) {
+                 setState(() {
+                   _priceController.text = event.basePrice.toString();
+                   _hasInitializedPrice = true; // Marcamos como hecho para que no se repita
+                 });
+                 print("✅ Precio automático aplicado: ${event.basePrice}€");
+               }
+             });
+          }
+          // ------------------------------------------------
 
-                    // --- CORRECCIÓN 2: Comparador ---
-                    // Ayuda a la librería a saber si dos objetos son el mismo (por ID)
-                    compareFn: (item1, item2) => item1.id == item2.id,
+          final bool showMenuBuilder = event.type == 'menu' || formState.items.isNotEmpty;
 
-                    // Qué texto mostrar en la lista
-                    itemAsString: (EstablishmentModel u) => u.name,
-
-                    // --- CORRECCIÓN 3: Cambio de nombre de parámetros de diseño ---
-                    // Antes: dropdownDecoratorProps -> Ahora: decoratorProps
-                    decoratorProps: const DropDownDecoratorProps(
-                      // Antes: dropdownSearchDecoration -> Ahora: decoration
-                      decoration: InputDecoration(
-                        labelText: "Establecimiento / Local",
-                        hintText: "Seleccione un local",
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.store),
-                      ),
-                    ),
-
-                    // Configuración del Popup (Buscador) - Esto se mantiene casi igual
-                    popupProps: const PopupProps.menu(
-                      showSearchBox: true,
-                      searchFieldProps: TextFieldProps(
-                        decoration: InputDecoration(
-                          hintText: "Escribe nombre del local...",
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        ),
-                      ),
-                      menuProps: MenuProps(borderRadius: BorderRadius.all(Radius.circular(10))),
-                    ),
-
-                    // Lógica al seleccionar
-                    onChanged: (EstablishmentModel? data) {
-                      if (data != null) {
-                        setState(() => _selectedEstablishmentId = data.id);
-                      }
-                    },
-
-                    // Valor inicial (Edición)
-                    selectedItem: _selectedEstablishmentId != null
-                        ? establishments.firstWhere(
-                            (e) => e.id == _selectedEstablishmentId,
-                            orElse: () => establishments.first)
-                        : null,
-                        
-                    // Validación
-                    validator: (item) {
-                      if (_selectedEstablishmentId == null && item == null) return "Requerido";
-                      return null;
-                    },
-                  );
-                },
-              ),
-              
-              const SizedBox(height: 16),
-
-              // 2. Datos Básicos
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre Producto',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.fastfood),
-                ),
-                validator: (v) => v!.isEmpty ? 'Requerido' : null,
-              ),
-              const SizedBox(height: 16),
-
-              // PRECIO
-              TextFormField(
-                controller: _priceController,
-                decoration: const InputDecoration(
-                  labelText: 'Precio (€)',
-                  border: OutlineInputBorder(),
-                  suffixText: '€',
-                  prefixIcon: Icon(Icons.euro),
-                ),
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-              ),
-
-              const SizedBox(height: 24),
-
-              // --- SECCIÓN IMAGEN ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Form(
+              key: _formKey,
+              child: ListView(
                 children: [
-                  const Text('Foto del Producto', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      Text(
-                        _useImageUpload ? "Subir Archivo" : "Enlace URL",
-                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                      ),
-                      Switch(
-                        value: _useImageUpload,
-                        activeThumbColor: Colors.black,
-                        onChanged: (val) => setState(() => _useImageUpload = val),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              if (_useImageUpload)
-                ImagePickerWidget(
-                  bucketName: 'products',
-                  initialUrl: _imageUrlController.text.isNotEmpty ? _imageUrlController.text : null,
-                  onImageUploaded: (url) {
-                    setState(() => _imageUrlController.text = url);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Imagen lista")));
-                  },
-                )
-              else
-                Column(
-                  children: [
-                    TextFormField(
-                      controller: _imageUrlController,
-                      decoration: const InputDecoration(
-                        labelText: "Pegar URL de la imagen",
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.link),
-                        hintText: "https://...",
-                      ),
-                      onChanged: (val) => setState(() {}),
-                    ),
-                    if (_imageUrlController.text.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade300),
-                              borderRadius: BorderRadius.circular(8),
-                              color: Colors.grey[100],
-                            ),
-                            child: Image.network(
-                              _imageUrlController.text,
-                              fit: BoxFit.cover,
-                              errorBuilder: (c, o, s) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                  if (formState.isLoading) const LinearProgressIndicator(),
+                  const SizedBox(height: 20),
+                  
+                  // SELECTOR DE ESTABLECIMIENTO
+                  establishmentsAsync.when(
+                    loading: () => const LinearProgressIndicator(),
+                    error: (e, _) => const Text('Error cargando locales'),
+                    data: (establishments) {
+                      return DropdownSearch<EstablishmentModel>(
+                        items: (filter, loadProps) {
+                           if (filter.isEmpty) return establishments;
+                           return establishments.where((element) => 
+                               element.name.toLowerCase().contains(filter.toLowerCase())
+                           ).toList();
+                        },
+                        compareFn: (item1, item2) => item1.id == item2.id,
+                        itemAsString: (EstablishmentModel u) => u.name,
+                        decoratorProps: const DropDownDecoratorProps(
+                          decoration: InputDecoration(
+                            labelText: "Establecimiento / Local",
+                            hintText: "Seleccione un local",
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.store),
+                          ),
+                        ),
+                        popupProps: const PopupProps.menu(
+                          showSearchBox: true,
+                          searchFieldProps: TextFieldProps(
+                            decoration: InputDecoration(
+                              hintText: "Buscar...",
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             ),
                           ),
                         ),
-                      ),
-                  ],
-                ),
-              
-              const SizedBox(height: 16),
-
-              // 3. Descripción e Ingredientes
-              TextFormField(
-                controller: _descController,
-                decoration: const InputDecoration(
-                  labelText: 'Descripción Corta (Marketing)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.description),
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _ingredientsController,
-                decoration: const InputDecoration(
-                  labelText: 'Ingredientes (Detallado)',
-                  border: OutlineInputBorder(),
-                  helperText: 'Lista separada por comas.',
-                  prefixIcon: Icon(Icons.list),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 24),
-
-              // 4. ALÉRGENOS
-              const Text('Alérgenos', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Wrap(
-                  spacing: 8.0,
-                  runSpacing: 4.0,
-                  children: _commonAllergens.map((allergen) {
-                    final isSelected = _selectedAllergens.contains(allergen);
-                    return FilterChip(
-                      label: Text(allergen),
-                      selected: isSelected,
-                      selectedColor: Colors.orange.shade100,
-                      checkmarkColor: Colors.orange,
-                      onSelected: (bool selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedAllergens.add(allergen);
-                          } else {
-                            _selectedAllergens.remove(allergen);
+                        onChanged: (EstablishmentModel? data) {
+                          if (data != null) {
+                            setState(() => _selectedEstablishmentId = data.id);
                           }
-                        });
+                        },
+                        selectedItem: _selectedEstablishmentId != null
+                            ? establishments.firstWhere(
+                                (e) => e.id == _selectedEstablishmentId,
+                                orElse: () => establishments.first)
+                            : null,
+                        validator: (item) {
+                          if (_selectedEstablishmentId == null && item == null) return "Requerido";
+                          return null;
+                        },
+                      );
+                    },
+                  ),
+                  
+                  const SizedBox(height: 16),
+
+                  // DATOS BÁSICOS
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Nombre Producto / Menú', border: OutlineInputBorder(), prefixIcon: Icon(Icons.fastfood)),
+                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // PRECIO
+                  TextFormField(
+                    controller: _priceController,
+                    decoration: const InputDecoration(labelText: 'Precio (€)', border: OutlineInputBorder(), suffixText: '€', prefixIcon: Icon(Icons.euro)),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // --- SECCIÓN IMAGEN ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Foto Principal', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          Text(_useImageUpload ? "Archivo" : "URL", style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                          Switch(value: _useImageUpload, activeThumbColor: Colors.black, onChanged: (val) => setState(() => _useImageUpload = val)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (_useImageUpload)
+                    ImagePickerWidget(
+                      bucketName: 'products',
+                      initialUrl: _imageUrlController.text.isNotEmpty ? _imageUrlController.text : null,
+                      onImageUploaded: (url) {
+                        setState(() => _imageUrlController.text = url);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Imagen lista")));
                       },
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 24),
+                    )
+                  else
+                    TextFormField(
+                      controller: _imageUrlController,
+                      decoration: const InputDecoration(labelText: "Pegar URL", border: OutlineInputBorder(), prefixIcon: Icon(Icons.link)),
+                      onChanged: (val) => setState(() {}),
+                    ),
+                  
+                  const SizedBox(height: 24),
 
-              // 5. ESTADOS
-              Card(
-                elevation: 0,
-                color: Colors.grey.shade50,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  children: [
-                    SwitchListTile(
-                      title: const Text('Disponible para el público'),
-                      subtitle: Text(_isAvailable ? 'Visible en la app' : 'Oculto/Agotado'),
-                      value: _isAvailable,
-                      activeThumbColor: Colors.green,
-                      onChanged: (val) => setState(() => _isAvailable = val),
+                  // SECCIÓN MENÚ
+                  if (showMenuBuilder) ...[
+                    const Divider(thickness: 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("PLATOS DEL MENÚ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ElevatedButton.icon(
+                          onPressed: () => _showAddDishDialog(context),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text("Añadir Plato"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white),
+                        ),
+                      ],
                     ),
-                    const Divider(height: 1),
-                    SwitchListTile(
-                      title: const Text('🏆 Marcar como Ganador'),
-                      subtitle: const Text('Activa esto si ha ganado'),
-                      value: _isWinner,
-                      activeThumbColor: Colors.amber,
-                      onChanged: (val) => setState(() => _isWinner = val),
-                    ),
+                    const SizedBox(height: 10),
+                    
+                    if (formState.items.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        color: Colors.orange.shade50,
+                        child: const Text("Menú vacío. Añade entrantes, principales, etc.", textAlign: TextAlign.center, style: TextStyle(color: Colors.orange)),
+                      )
+                    else
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: formState.items.length,
+                        itemBuilder: (context, index) {
+                          final item = formState.items[index];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: _getColorForCourse(item.courseType),
+                                child: Icon(_getIconForCourse(item.courseType), color: Colors.white, size: 16),
+                              ),
+                              title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text(item.courseType.toUpperCase()),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () {
+                                  ref.read(productFormControllerProvider.notifier).removeMenuCourse(index);
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    const Divider(thickness: 2),
+                    const SizedBox(height: 20),
                   ],
-                ),
-              ),
 
-              const SizedBox(height: 32),
-              
-              // BOTÓN GUARDAR
-              ElevatedButton.icon(
-                icon: const Icon(Icons.save),
-                label: Text(_isLoading ? 'Guardando...' : 'GUARDAR PRODUCTO'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: _isLoading ? null : _saveProduct,
+
+                  // Descripción e Ingredientes
+                  TextFormField(
+                    controller: _descController,
+                    decoration: const InputDecoration(
+                      labelText: 'Descripción', 
+                      alignLabelWithHint: true,
+                      border: OutlineInputBorder(), 
+                      prefixIcon: Padding(
+                        padding: EdgeInsets.only(bottom: 40),
+                        child: Icon(Icons.description),
+                      ),
+                    ),
+                    maxLines: 4,
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _ingredientsController,
+                    decoration: const InputDecoration(labelText: 'Ingredientes', border: OutlineInputBorder(), prefixIcon: Icon(Icons.list)),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Alérgenos
+                  const Text('Alérgenos', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8.0,
+                    children: _commonAllergens.map((allergen) {
+                      final isSelected = _selectedAllergens.contains(allergen);
+                      return FilterChip(
+                        label: Text(allergen),
+                        selected: isSelected,
+                        onSelected: (bool selected) {
+                          setState(() {
+                            if (selected) {
+                              _selectedAllergens.add(allergen);
+                            } else {
+                              _selectedAllergens.remove(allergen);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Estados
+                  SwitchListTile(
+                    title: const Text('Disponible'),
+                    value: _isAvailable,
+                    onChanged: (val) => setState(() => _isAvailable = val),
+                  ),
+                  SwitchListTile(
+                    title: const Text('🏆 Marcar como Ganador'),
+                    value: _isWinner,
+                    onChanged: (val) => setState(() => _isWinner = val),
+                  ),
+
+                  const SizedBox(height: 32),
+                  
+                  // BOTÓN GUARDAR
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: Text(formState.isLoading ? 'GUARDANDO...' : 'GUARDAR PRODUCTO'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: formState.isLoading ? null : () => _saveProduct(context),
+                    ),
+                  ),
+                  
+                  if (formState.error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text("Error: ${formState.error}", style: const TextStyle(color: Colors.red)),
+                    ),
+                  
+                  const SizedBox(height: 30),
+                ],
               ),
-              const SizedBox(height: 30),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Future<void> _saveProduct() async {
+  Future<void> _saveProduct(BuildContext context) async {
     if (!_formKey.currentState!.validate()) return;
     
-    // Validación manual del dropdown si falló la automática
     if (_selectedEstablishmentId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Falta seleccionar el establecimiento')));
       return;
     }
 
-    if (_imageUrlController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Debes subir una imagen o pegar una URL'), backgroundColor: Colors.orange));
-      return;
-    }
+    final price = double.tryParse(_priceController.text) ?? 0.0;
+    final allergensString = _selectedAllergens.join(', ');
 
-    setState(() => _isLoading = true);
+    await ref.read(productFormControllerProvider.notifier).saveProduct(
+      id: widget.productToEdit?.id, 
+      name: _nameController.text,
+      description: _descController.text,
+      price: price,
+      establishmentId: _selectedEstablishmentId!,
+      eventId: widget.initialEventId,
+      newImage: null, 
+      currentImageUrl: _imageUrlController.text,
+      ingredients: _ingredientsController.text,
+      allergens: allergensString,
+    );
 
-    try {
-      final price = double.tryParse(_priceController.text) ?? 0.0;
-
-      final product = ProductModel(
-        id: widget.productToEdit?.id ?? 0,
-        eventId: widget.initialEventId,
-        establishmentId: _selectedEstablishmentId!,
-        name: _nameController.text,
-        description: _descController.text,
-        ingredients: _ingredientsController.text, // GUARDAMOS INGREDIENTES
-        price: price,
-        imageUrl: _imageUrlController.text.isNotEmpty ? _imageUrlController.text : null,
-        allergens: _selectedAllergens,
-        isAvailable: _isAvailable,
-        isWinner: _isWinner,
-      );
-
-      final repo = ref.read(productRepositoryProvider);
-      if (widget.productToEdit == null) {
-        await repo.createProduct(product);
-      } else {
-        await repo.updateProduct(product);
-      }
-
-      if (mounted) {
+    if (mounted) {
+      final state = ref.read(productFormControllerProvider);
+      if (state.isSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Producto guardado correctamente"), backgroundColor: Colors.green));
         Navigator.pop(context, true);
       }
-    } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showAddDishDialog(BuildContext context) {
+    String name = '';
+    String description = '';
+    
+    final currentItems = ref.read(productFormControllerProvider).items;
+    final usedTypes = currentItems.map((e) => e.courseType).toList();
+    
+    final allTypes = {
+      'entrante': 'Entrante',
+      'principal': 'Plato Principal',
+      'postre': 'Postre',
+      'bebida': 'Bebida',
+    };
+
+    final availableTypes = allTypes.entries
+        .where((entry) => !usedTypes.contains(entry.key))
+        .toList();
+
+    if (availableTypes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("¡El menú ya está completo!")),
+      );
+      return;
+    }
+
+    String courseType = availableTypes.first.key; 
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Añadir Plato al Menú"),
+        content: SingleChildScrollView( 
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: courseType,
+                items: availableTypes.map((entry) {
+                  return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                }).toList(),
+                onChanged: (v) => courseType = v!,
+                decoration: const InputDecoration(labelText: "Tipo"),
+              ),
+              const SizedBox(height: 10),
+              
+              TextField(
+                decoration: const InputDecoration(labelText: "Nombre del plato"),
+                onChanged: (v) => name = v,
+                autofocus: true,
+              ),
+              const SizedBox(height: 10),
+              
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: "Descripción (opcional)",
+                  hintText: "Ej: Con salsa de almendras",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3, 
+                minLines: 3, 
+                onChanged: (v) => description = v,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: () {
+              if (name.isNotEmpty) {
+                ref.read(productFormControllerProvider.notifier).addMenuCourse(
+                  name: name,
+                  courseType: courseType,
+                  description: description,
+                );
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text("Añadir"),
+          )
+        ],
+      ),
+    );
+  }
+
+  Color _getColorForCourse(String type) {
+    switch (type) {
+      case 'entrante': return Colors.green;
+      case 'principal': return Colors.orange;
+      case 'postre': return Colors.pink;
+      case 'bebida': return Colors.blue;
+      default: return Colors.grey;
+    }
+  }
+
+  IconData _getIconForCourse(String type) {
+    switch (type) {
+      case 'entrante': return Icons.soup_kitchen;
+      case 'principal': return Icons.restaurant;
+      case 'postre': return Icons.icecream;
+      case 'bebida': return Icons.local_bar;
+      default: return Icons.fastfood;
     }
   }
 }

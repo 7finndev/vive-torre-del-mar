@@ -1,15 +1,17 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
-
-// IMPORTS
-import 'package:torre_del_mar_app/core/utils/image_picker_widget.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
+// IMPORTAMOS EL NUEVO HELPER
+import 'package:torre_del_mar_app/core/utils/geocoding_helper.dart';
 
 class EstablishmentFormScreen extends ConsumerStatefulWidget {
   final EstablishmentModel? establishmentToEdit;
-
   const EstablishmentFormScreen({super.key, this.establishmentToEdit});
 
   @override
@@ -21,6 +23,7 @@ class _EstablishmentFormScreenState
     extends ConsumerState<EstablishmentFormScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _isGeocoding = false; // Para el spinner del botón GPS
 
   // Controladores
   final _nameController = TextEditingController();
@@ -35,15 +38,21 @@ class _EstablishmentFormScreenState
   final _instagramCtrl = TextEditingController();
   final _tiktokCtrl = TextEditingController();
 
-  // Estado de los switches
+  // NUEVOS CONTROLADORES GPS
+  final _latController = TextEditingController();
+  final _lngController = TextEditingController();
+
+  final MapController _mapController = MapController(); // <--- NUEVO
+  
   bool _isPartner = true;
   bool _isActive = true;
-  bool _useImageUpload = true; 
+  bool _useImageUpload = true;
+
+  Uint8List? _selectedImageBytes;
 
   @override
   void initState() {
     super.initState();
-    // Si estamos editando, rellenamos los campos
     if (widget.establishmentToEdit != null) {
       final e = widget.establishmentToEdit!;
       _nameController.text = e.name;
@@ -52,16 +61,59 @@ class _EstablishmentFormScreenState
       _ownerController.text = e.ownerName ?? '';
       _phoneController.text = e.phone ?? '';
       _scheduleController.text = e.schedule ?? '';
-      
-      // CORRECCIÓN 1: Usar .text para asignar valores
       _webCtrl.text = e.website ?? '';
       _facebookCtrl.text = e.facebook ?? '';
       _instagramCtrl.text = e.instagram ?? '';
       _tiktokCtrl.text = e.socialTiktok ?? '';
       _imageController.text = e.coverImage ?? '';
-
       _isPartner = e.isPartner;
       _isActive = e.isActive;
+
+      // CARGAR GPS SI EXISTE
+      if (e.latitude != null) _latController.text = e.latitude.toString();
+      if (e.longitude != null) _lngController.text = e.longitude.toString();
+    }
+  }
+
+  // FUNCIÓN PARA BUSCAR GPS AUTOMÁTICO
+  Future<void> _findCoordinates() async {
+    if (_addressController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Escribe una dirección primero")));
+      return;
+    }
+
+    setState(() => _isGeocoding = true);
+
+    final coords = await GeocodingHelper.getCoordinatesFromAddress(_addressController.text);
+
+    if (mounted) {
+      setState(() => _isGeocoding = false);
+      
+      if (coords != null) {
+        final lat = coords[0];
+        final lng = coords[1];
+
+        _latController.text = lat.toString();
+        _lngController.text = lng.toString();
+        
+        // 🚀 MOVEMOS EL MAPA AL NUEVO PUNTO
+        _mapController.move(LatLng(lat, lng), 17.0);
+
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("📍 ¡Ubicación encontrada!"), backgroundColor: Colors.green));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ No encontrada. Intenta simplificar la dirección.")));
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      setState(() {
+        _selectedImageBytes = bytes;
+      });
     }
   }
 
@@ -70,9 +122,7 @@ class _EstablishmentFormScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.establishmentToEdit != null
-              ? "Editar Socio"
-              : "Alta de Nuevo Socio",
+          widget.establishmentToEdit != null ? "Editar Socio" : "Nuevo Socio",
         ),
       ),
       body: SingleChildScrollView(
@@ -80,37 +130,7 @@ class _EstablishmentFormScreenState
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- SECCIÓN 1: DATOS INTERNOS ---
-              const Text(
-                "Datos del Responsable (Interno)",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _ownerController,
-                decoration: const InputDecoration(
-                  labelText: "Nombre del Propietario",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 10),
-
-              // --- SECCIÓN 2: DATOS PÚBLICOS ---
-              const Text(
-                "Ficha del Establecimiento (Público)",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
@@ -119,19 +139,139 @@ class _EstablishmentFormScreenState
                 ),
                 validator: (v) => v!.isEmpty ? 'Requerido' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 15),
 
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(
-                  labelText: "Dirección Completa",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.location_on),
-                ),
-                validator: (v) => v!.isEmpty ? 'Requerido' : null,
+              // --- SECCIÓN DIRECCIÓN Y GPS ---
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      controller: _addressController,
+                      decoration: const InputDecoration(
+                        labelText: "Dirección",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.location_on),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 1,
+                    child: SizedBox(
+                      height: 58, // Altura para igualar al input
+                      child: ElevatedButton(
+                        onPressed: _isGeocoding ? null : _findCoordinates,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade50,
+                          foregroundColor: Colors.blue.shade900,
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: _isGeocoding
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.search_outlined),
+                                  Text(
+                                    "Buscar GPS",
+                                    style: TextStyle(fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
+              // COORDENADAS MANUALES
+              // ... (Después del botón buscar GPS y las casillas de texto lat/long) ...
 
+              const SizedBox(height: 10),
+              // COORDENADAS MANUALES
+              Row(
+                children: [
+                  Expanded(child: TextFormField(controller: _latController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Latitud", hintText: "36.7...", isDense: true, border: OutlineInputBorder()))),
+                  const SizedBox(width: 10),
+                  Expanded(child: TextFormField(controller: _lngController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Longitud", hintText: "-4.1...", isDense: true, border: OutlineInputBorder()))),
+                ],
+              ),
+              
+              const SizedBox(height: 10),
+
+              // ========================================================
+              // 🗺️ MAPA INTERACTIVO (OPENSTREETMAP)
+              // ========================================================
+              Container(
+                height: 300,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      // Centro inicial: Torre del Mar (o la latitud guardada)
+                      initialCenter: _latController.text.isNotEmpty 
+                          ? LatLng(double.parse(_latController.text), double.parse(_lngController.text))
+                          : const LatLng(36.741, -4.093), 
+                      initialZoom: 15.0,
+                      onTap: (tapPosition, point) {
+                        // AL TOCAR EL MAPA, ACTUALIZAMOS LAS CASILLAS
+                        setState(() {
+                          _latController.text = point.latitude.toStringAsFixed(6);
+                          _lngController.text = point.longitude.toStringAsFixed(6);
+                        });
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.torredelmar.admin',
+                      ),
+                      // MARCADOR QUE SIGUE AL CLIC
+                      MarkerLayer(
+                        markers: [
+                          if (_latController.text.isNotEmpty && _lngController.text.isNotEmpty)
+                            Marker(
+                              point: LatLng(
+                                double.tryParse(_latController.text) ?? 36.74, 
+                                double.tryParse(_lngController.text) ?? -4.09
+                              ),
+                              width: 40,
+                              height: 40,
+                              child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 5),
+              const Text("👆 Toca en el mapa para ajustar la posición exacta", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              // ========================================================
+
+              // -----------------------------
+              const SizedBox(height: 15),
+              TextFormField(
+                controller: _ownerController,
+                decoration: const InputDecoration(
+                  labelText: "Nombre Propietario",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
               TextFormField(
                 controller: _descController,
                 decoration: const InputDecoration(
@@ -140,207 +280,108 @@ class _EstablishmentFormScreenState
                 ),
                 maxLines: 3,
               ),
-              const SizedBox(height: 16),
-
-              // TELÉFONO (Solo, ya que web va abajo)
+              const SizedBox(height: 15),
               TextFormField(
                 controller: _phoneController,
                 decoration: const InputDecoration(
-                  labelText: "Teléfono Público",
+                  labelText: "Teléfono",
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.phone),
-                ),
-                keyboardType: TextInputType.phone,
-              ),
-
-              const SizedBox(height: 24),
-              
-              // --- SECCIÓN PRESENCIA DIGITAL ---
-              const Text("Presencia Digital", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              
-              // 1. WEB
-              TextFormField(
-                controller: _webCtrl,
-                decoration: const InputDecoration(
-                  labelText: "Página Web", 
-                  hintText: "https://tuhotel.com",
-                  prefixIcon: Icon(Icons.language), 
-                  border: OutlineInputBorder()
-                ),
-                keyboardType: TextInputType.url,
-              ),
-              const SizedBox(height: 12),
-
-              // 2. FACEBOOK E INSTAGRAM (En fila)
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _facebookCtrl,
-                      decoration: const InputDecoration(
-                        labelText: "Facebook", 
-                        prefixIcon: Icon(Icons.facebook), 
-                        border: OutlineInputBorder()
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _instagramCtrl,
-                      decoration: const InputDecoration(
-                        labelText: "Instagram", 
-                        prefixIcon: Icon(Icons.camera_alt), 
-                        border: OutlineInputBorder()
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // 3. TIKTOK
-              TextFormField(
-                controller: _tiktokCtrl,
-                decoration: const InputDecoration(
-                  labelText: "TikTok", 
-                  prefixIcon: Icon(Icons.music_note), 
-                  border: OutlineInputBorder()
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-
-              // --- HORARIO ---
-              TextFormField(
-                controller: _scheduleController,
-                decoration: const InputDecoration(
-                  labelText: "Horario Apertura",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.access_time),
-                  hintText: "Ej: L-D: 12:00 - 24:00",
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 25),
 
-              // --- SECCIÓN 3: IMAGEN (CON DOBLE OPCIÓN) ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Foto de Portada / Fachada',
+                    'Foto de Portada',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-
-                  // INTERRUPTOR
-                  Row(
-                    children: [
-                      Text(
-                        _useImageUpload ? "Subir Archivo" : "Enlace URL",
-                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                      ),
-                      Switch(
-                        value: _useImageUpload,
-                        activeThumbColor: Colors.black, // Corregido activeThumbColor
-                        onChanged: (val) {
-                          setState(() {
-                            _useImageUpload = val;
-                          });
-                        },
-                      ),
-                    ],
+                  Switch(
+                    value: _useImageUpload,
+                    onChanged: (v) => setState(() => _useImageUpload = v),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
 
-              // LÓGICA DE VISUALIZACIÓN
               if (_useImageUpload)
-                ImagePickerWidget(
-                  bucketName: 'establishment',
-                  initialUrl: _imageController.text.isNotEmpty
-                      ? _imageController.text
-                      : null,
-                  onImageUploaded: (url) {
-                    setState(() {
-                      _imageController.text = url;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("✅ Imagen subida")),
-                    );
-                  },
-                )
-              else
                 Column(
                   children: [
-                    TextFormField(
-                      controller: _imageController,
-                      decoration: const InputDecoration(
-                        labelText: "Pegar URL de la imagen",
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.link),
-                        hintText: "https://ejemplo.com/foto.jpg",
+                    Container(
+                      height: 200,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade400),
                       ),
-                      onChanged: (val) =>
-                          setState(() {}),
-                    ),
-                    if (_imageController.text.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade300),
-                              borderRadius: BorderRadius.circular(8),
-                              color: Colors.grey[100],
-                            ),
-                            child: Image.network(
-                              _imageController.text,
-                              fit: BoxFit.cover,
-                              errorBuilder: (c, o, s) => const Center(
-                                child: Icon(Icons.broken_image, color: Colors.grey),
+                      // LÓGICA MEJORADA DE IMAGEN
+                      child: _selectedImageBytes != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.memory(
+                                _selectedImageBytes!,
+                                fit: BoxFit.cover,
                               ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              const SizedBox(height: 24),
-
-              // --- SECCIÓN 4: ESTADO ---
-              Card(
-                elevation: 0,
-                color: Colors.grey[50],
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: Colors.grey.shade300),
-                ),
-                child: Column(
-                  children: [
-                    SwitchListTile(
-                      title: const Text("Es Socio de la ACET"),
-                      subtitle: const Text("Aparece con distintivo de socio"),
-                      value: _isPartner,
-                      activeThumbColor: Colors.blue, // Corregido activeThumbColor
-                      onChanged: (v) => setState(() => _isPartner = v),
+                            )
+                          : (_imageController.text.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Image.network(
+                                      _imageController.text,
+                                      fit: BoxFit.cover,
+                                      // ESTO EVITA QUE LA APP PETE SI LA IMAGEN FALLA
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(
+                                              Icons.broken_image,
+                                              size: 40,
+                                              color: Colors.red,
+                                            ),
+                                            const SizedBox(height: 5),
+                                            const Text(
+                                              "No se puede cargar la imagen externa",
+                                              style: TextStyle(fontSize: 10),
+                                            ),
+                                            TextButton(
+                                              onPressed: () {},
+                                              child: const Text(
+                                                "(Sube una nueva)",
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : const Center(
+                                    child: Icon(
+                                      Icons.add_a_photo,
+                                      size: 50,
+                                      color: Colors.grey,
+                                    ),
+                                  )),
                     ),
-                    const Divider(height: 1),
-                    SwitchListTile(
-                      title: const Text("Local Activo"),
-                      subtitle: const Text(
-                        "Si se desactiva, no aparecerá en la app",
-                      ),
-                      value: _isActive,
-                      activeThumbColor: Colors.green, // Corregido activeThumbColor
-                      onChanged: (v) => setState(() => _isActive = v),
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      onPressed: _pickImage,
+                      icon: const Icon(Icons.image),
+                      label: const Text("Seleccionar Imagen"),
                     ),
                   ],
+                )
+              else
+                TextFormField(
+                  controller: _imageController,
+                  decoration: const InputDecoration(
+                    labelText: "URL Manual",
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
 
               const SizedBox(height: 30),
 
@@ -357,7 +398,6 @@ class _EstablishmentFormScreenState
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -370,37 +410,48 @@ class _EstablishmentFormScreenState
     setState(() => _isLoading = true);
 
     try {
+      final repo = ref.read(establishmentRepositoryProvider);
+      String? finalImageUrl = _imageController.text.isNotEmpty
+          ? _imageController.text
+          : null;
+
+      if (_useImageUpload && _selectedImageBytes != null) {
+        final fileName = '${const Uuid().v4()}.jpg';
+        finalImageUrl = await repo.uploadEstablishmentImage(
+          fileName,
+          _selectedImageBytes!,
+        );
+      }
+
+      // CONVERSIÓN DE COORDENADAS
+      // Reemplazamos coma por punto por si el teclado está en español
+      double? lat;
+      double? lng;
+      if (_latController.text.isNotEmpty) {
+        lat = double.tryParse(_latController.text.replaceAll(',', '.'));
+      }
+      if (_lngController.text.isNotEmpty) {
+        lng = double.tryParse(_lngController.text.replaceAll(',', '.'));
+      }
+
       final establishment = EstablishmentModel(
         id: widget.establishmentToEdit?.id ?? 0,
         name: _nameController.text,
         address: _addressController.text,
         description: _descController.text,
-
         ownerName: _ownerController.text,
         phone: _phoneController.text,
-
-        website: _webCtrl.text.isNotEmpty ? _webCtrl.text : null,
-        facebook: _facebookCtrl.text.isNotEmpty ? _facebookCtrl.text : null,
-        instagram: _instagramCtrl.text.isNotEmpty ? _instagramCtrl.text : null,
-        socialTiktok: _tiktokCtrl.text.isNotEmpty ? _tiktokCtrl.text : null,
-
+        website: _webCtrl.text,
         schedule: _scheduleController.text,
-
-        coverImage: _imageController.text.isNotEmpty
-            ? _imageController.text
-            : null,
-
+        coverImage: finalImageUrl,
         isPartner: _isPartner,
         isActive: _isActive,
-
-        // Generar UUID si es nuevo
         qrUuid: widget.establishmentToEdit?.qrUuid ?? const Uuid().v4(),
-
-        latitude: widget.establishmentToEdit?.latitude,
-        longitude: widget.establishmentToEdit?.longitude,
+        // AQUI METEMOS LAS COORDENADAS NUEVAS
+        latitude: lat,
+        longitude: lng,
+        // -----------------------------------
       );
-
-      final repo = ref.read(establishmentRepositoryProvider);
 
       if (widget.establishmentToEdit == null) {
         await repo.createEstablishment(establishment);
@@ -410,12 +461,15 @@ class _EstablishmentFormScreenState
 
       if (mounted) {
         Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Guardado correctamente")),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

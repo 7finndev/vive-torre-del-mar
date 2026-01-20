@@ -7,6 +7,7 @@ import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
+import 'package:torre_del_mar_app/features/home/data/repositories/product_repository.dart';
 import 'package:torre_del_mar_app/features/scan/data/repositories/passport_repository.dart';
 import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 
@@ -56,9 +57,10 @@ Stream<List<ConnectivityResult>> connectivityStream(ConnectivityStreamRef ref) {
 // 5. Proveedor de la LISTA DE PRODUCTOS (Filtrada por evento actual - PARA USUARIO)
 @riverpod
 Future<List<ProductModel>> productsList(ProductsListRef ref) async {
-  final repository = ref.watch(establishmentRepositoryProvider);
+  final repository = ref.watch(productRepositoryProvider);//establishmentRepositoryProvider);
   final event = await ref.watch(currentEventProvider.future);
-  return repository.getProducts(eventId: event.id);
+  return repository.getProductsByEvent(event.id);
+  //return repository.getProducts(eventId: event.id);
 }
 
 // 6. Proveedor del Repositorio de Pasaporte
@@ -111,4 +113,20 @@ Future<List<EstablishmentModel>> allEstablishmentsList(AllEstablishmentsListRef 
       .order('name', ascending: true); // A-Z
 
   return response.map((e) => EstablishmentModel.fromJson(e)).toList();
+}
+
+// 10. Detalle de un Evento específico por ID (Necesario para el Admin Form)
+// Esto permite buscar un evento (ej: ID 5) para ver si es tipo 'menu' o 'tapa'
+@riverpod
+Future<EventModel> eventDetails(EventDetailsRef ref, int eventId) async {
+  final supabase = Supabase.instance.client;
+  
+  // Hacemos una consulta directa a Supabase para obtener ese evento
+  final response = await supabase
+      .from('events')
+      .select()
+      .eq('id', eventId)
+      .single();
+
+  return EventModel.fromJson(response);
 }

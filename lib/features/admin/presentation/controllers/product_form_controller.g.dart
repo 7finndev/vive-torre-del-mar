@@ -7,12 +7,12 @@ part of 'product_form_controller.dart';
 // **************************************************************************
 
 String _$productFormControllerHash() =>
-    r'fbeacfc5c84cf87e7513288edb94af4efb44e414';
+    r'510d2259b519a15bf16b1776f0e612f6fbe28fda';
 
 /// See also [ProductFormController].
 @ProviderFor(ProductFormController)
-final productFormControllerProvider =
-    AutoDisposeAsyncNotifierProvider<ProductFormController, void>.internal(
+final productFormControllerProvider = AutoDisposeNotifierProvider<
+    ProductFormController, ProductFormState>.internal(
   ProductFormController.new,
   name: r'productFormControllerProvider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -22,6 +22,6 @@ final productFormControllerProvider =
   allTransitiveDependencies: null,
 );
 
-typedef _$ProductFormController = AutoDisposeAsyncNotifier<void>;
+typedef _$ProductFormController = AutoDisposeNotifier<ProductFormState>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

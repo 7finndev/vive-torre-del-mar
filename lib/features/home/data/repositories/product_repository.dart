@@ -11,49 +11,74 @@ class ProductRepository {
   ProductRepository(this._client);
 
   // 1. Subir Imagen al Storage
-  Future<String> uploadProductImage(String fileName, Uint8List fileBytes) async {
-    final path = 'products/$fileName';
-    
-    // Asegúrate de tener un bucket llamado 'products' en Supabase Storage
-    await _client.storage.from('products').uploadBinary(
-          path,
-          fileBytes,
-          fileOptions: const FileOptions(upsert: true),
-        );
+  Future<String> uploadProductImage(
+    String fileName,
+    Uint8List fileBytes,
+  ) async {
+    try {
+      final bucketName = 'products';
+      final path = '$bucketName/$fileName';
 
-    // Obtener URL pública
-    return _client.storage.from('products').getPublicUrl(path);
+      await _client.storage
+          .from('products')
+          .uploadBinary(
+            path,
+            fileBytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+
+      // Obtener URL pública
+      return _client.storage.from(bucketName).getPublicUrl(path);
+    } catch (e) {
+      print("⚠️ Error subiendo tapa: $e");
+      throw Exception("Error subiendo imagen de producto");
+    }
   }
 
-  // 2. Crear Producto en Base de Datos
+  // 2. Crear Producto (SOPORTE PARA MENÚS)
   Future<void> createProduct(ProductModel product) async {
-    // 1.-Convertimos el modelo a Mapa JSON
+    // A. Guardamos el PADRE (El Menú/Tapa)
     final productMap = product.toJson();
+    productMap.remove('id'); // Dejamos que la DB genere el ID
+    // IMPORTANTE: Asegúrate de que tu modelo 'toJson' NO incluya la lista 'items' 
+    // o bórrala aquí para que no falle al insertar en la tabla 'event_products'
+    productMap.remove('items'); 
+    productMap.remove('product_items'); 
 
-    // 2.-Importante: Eliminamos el 'id' del mapa.
-    // Como en Dart el Id es obligatorio, le pasamos '0' temporalmente,
-    // pero a Supabase no debemos enviarle 'id': 0, debemos enviar 'null' o nada
-    // para que la base de datos genere el siguiente número (auto increment).
-    productMap.remove('id');
+    // Insertamos y PEDIMOS QUE NOS DEVUELVA EL ID GENERADO
+    final response = await _client
+        .from('event_products')
+        .insert(productMap)
+        .select()
+        .single();
+    
+    final newProductId = response['id'] as int;
 
-    // 3.-Insertamos
-    await _client.from('event_products').insert(productMap);
+    // B. Guardamos los HIJOS (Los Platos), si existen
+    if (product.items.isNotEmpty) {
+      final itemsToInsert = product.items.map((item) {
+        final json = item.toJson();
+        json['product_id'] = newProductId; // Vinculamos con el padre
+        return json;
+      }).toList();
+
+      await _client.from('product_items').insert(itemsToInsert);
+    }
   }
 
-  // 3. Obtener Productos por Evento (Lectura)
+  // 3. Obtener Productos por Evento (Lectura CON ITEMS)
   Future<List<ProductModel>> getProductsByEvent(int eventId) async {
     try {
       final response = await _client
           .from('event_products')
-          .select()
-          .eq('event_id', eventId) // FILTRO CLAVE
-          .order('name', ascending: true); // Orden alfabético
+          // CAMBIO CLAVE: Pedimos todas las columnas (*) Y TAMBIÉN la tabla product_items
+          .select('*, product_items(*)')
+          .eq('event_id', eventId)
+          .order('name', ascending: true);
 
-      // Mapeamos la lista de JSON a objetos ProductModel
       final data = List<Map<String, dynamic>>.from(response);
       return data.map((json) => ProductModel.fromJson(json)).toList();
     } catch (e) {
-      // Es buena práctica lanzar una excepción limpia o loguear
       throw Exception('Error cargando productos: $e');
     }
   }
@@ -63,30 +88,44 @@ class ProductRepository {
     await _client.from('event_products').delete().eq('id', productId);
   }
 
-  // 5. Actualizar Producto Existente
+  // 5. Actualizar Producto (SOPORTE PARA MENÚS)
   Future<void> updateProduct(ProductModel product) async {
-    // Convertimos el objeto a Mapa JSON
+    // A. Actualizamos el PADRE
     final map = product.toJson();
-    
-    // IMPORTANTE: Quitamos el ID del mapa de datos a enviar.
-    // No queremos modificar el ID (clave primaria), solo usarlo para saber QUÉ fila actualizar.
     map.remove('id');
+    map.remove('items'); // Limpiamos para no ensuciar la query
+    map.remove('product_items');
 
-    // Ejecutamos el Update en Supabase
     await _client
-        .from('event_products') // Asegúrate de que tu tabla se llama así
+        .from('event_products')
         .update(map)
-        .eq('id', product.id); // Cláusula WHERE id = product.id
+        .eq('id', product.id);
+
+    // B. Actualizamos los HIJOS (Estrategia: Borrar todo y re-insertar)
+    // Es lo más sencillo para evitar lógica compleja de comparar qué plato cambió.
+    if (product.items.isNotEmpty) {
+      // 1. Borramos los platos viejos de este producto
+      await _client.from('product_items').delete().eq('product_id', product.id);
+      
+      // 2. Insertamos los nuevos (que vienen del formulario)
+      final itemsToInsert = product.items.map((item) {
+        final json = item.toJson();
+        json['product_id'] = product.id; // Mantenemos el ID del padre existente
+        return json;
+      }).toList();
+
+      await _client.from('product_items').insert(itemsToInsert);
+    } else {
+      // Si la lista viene vacía, nos aseguramos de borrar lo que hubiera (por si pasó de Menú a Tapa)
+      await _client.from('product_items').delete().eq('product_id', product.id);
+    }
   }
 
-  // --- AÑADE ESTO DENTRO DE ProductRepository ---
-  
-  // Función para obtener TODOS los productos (sin filtrar por evento)
-  // Útil para el panel de administración
+  // Función para obtener TODOS los productos (CON ITEMS)
   Future<List<ProductModel>> getAllProducts() async {
     final response = await _client
         .from('event_products')
-        .select(); // Sin filtros, tráelo todo
+        .select('*, product_items(*)'); // <--- AÑADIR TAMBIÉN AQUÍ
 
     return response.map((json) => ProductModel.fromJson(json)).toList();
   }
