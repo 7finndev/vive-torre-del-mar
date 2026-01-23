@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:torre_del_mar_app/core/widgets/error_view.dart';
 import 'package:torre_del_mar_app/features/admin/data/dashboard_repository.dart';
+import 'package:torre_del_mar_app/features/admin/presentation/screens/admin_sponsors_screen.dart';
 
 // --- IMPORTS DE TU PROYECTO ---
 // Ajusta las rutas relativas según tu estructura exacta
@@ -82,10 +84,27 @@ class AdminDashboardScreen extends ConsumerWidget {
                     height: 50,
                     child: Center(child: LinearProgressIndicator()),
                   ),
+                  //ErrorView:
+                  error: (err, _) => Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.wifi_off, color: Colors.red),
+                          const SizedBox(width: 10),
+                          const Expanded(child: Text("Sin conexión", style: TextStyle(color: Colors.red))),
+                          IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () => ref.invalidate(adminEventsListProvider)
+                          )
+                        ],
+                      ),
+                  ),
+                  /*
                   error: (_, __) => const Padding(
                     padding: EdgeInsets.all(16),
                     child: Text('Error cargando eventos'),
                   ),
+                  */
                   data: (events) {
                     // 1. Auto-selección inicial (si no hay nada seleccionado)
                     if (selectedEvent == null && events.isNotEmpty) {
@@ -274,6 +293,13 @@ class AdminDashboardScreen extends ConsumerWidget {
                   height: 200,
                   child: Center(child: CircularProgressIndicator()),
                 ),
+                //Modificamos esta sección para mostrar mensaje adecuado de error
+                // al fallar la conexión:
+                error: (err, _) => ErrorView(
+                  error: err,
+                  onRetry: () => ref.invalidate(dashboardStatsProvider),
+                ),
+                /* Antiguo mensaje de error.
                 error: (err, _) => Container(
                   padding: const EdgeInsets.all(16),
                   color: Colors.red.shade50,
@@ -282,6 +308,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                     style: const TextStyle(color: Colors.red),
                   ),
                 ),
+                */
               ),
 
               const SizedBox(height: 24),
@@ -299,7 +326,14 @@ class AdminDashboardScreen extends ConsumerWidget {
               statsAsync.when(
                 data: (stats) =>
                     _DistributionChart(stats: stats), // Pasamos los datos
-                error: (_, __) => const SizedBox(),
+                error: (_, __) => const SizedBox(
+                  height: 100,
+                  child: Center(
+                    child: Text("No se pueden cargar datos del gráfico.", 
+                    style: TextStyle(color: Colors.grey)
+                    )
+                  )
+                ),
                 loading: () => const Center(child: LinearProgressIndicator()),
               ),
 
@@ -335,7 +369,20 @@ class AdminDashboardScreen extends ConsumerWidget {
                 color: Colors.redAccent,
                 onTap: () => context.go('/admin/participaciones'),
               ),
-
+              // --- NUEVO BOTÓN AÑADIDO ---
+              _QuickActionCard(
+                title: 'Patrocinadores',
+                subtitle: 'Gestionar logos y colaboradores',
+                icon: Icons.handshake, // Icono de apretón de manos
+                color: Colors.purpleAccent,
+                onTap: () {
+                   // Navegación directa sin configurar GoRouter
+                   Navigator.of(context).push(
+                     MaterialPageRoute(builder: (context) => const AdminSponsorsScreen()),
+                   );
+                },
+              ),
+              // ---------------------------
               const SizedBox(height: 40),
             ],
           ),

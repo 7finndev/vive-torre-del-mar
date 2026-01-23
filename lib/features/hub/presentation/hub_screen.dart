@@ -6,14 +6,21 @@ import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_prov
 import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-// TUS IMPORTS
-import 'package:torre_del_mar_app/core/constants/app_data.dart';
+// IMPORTS DEL PROYECTO
 import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
-import 'package:torre_del_mar_app/features/home/data/repositories/event_repository.dart';
-import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
+
+// ✅ RUTAS CORREGIDAS:
+import 'package:torre_del_mar_app/features/scan/data/repositories/passport_repository.dart';
+import 'package:torre_del_mar_app/features/auth/data/repositories/auth_repository.dart'; // <--- ESTA ERA LA QUE FALLABA
+
+import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart'
+    hide passportRepositoryProvider;
 import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
 import 'package:torre_del_mar_app/features/hub/data/news_service.dart';
+
+// ✅ WIDGET DE ERROR
+import 'package:torre_del_mar_app/core/widgets/error_view.dart';
 
 class HubScreen extends ConsumerStatefulWidget {
   const HubScreen({super.key});
@@ -27,9 +34,10 @@ class _HubScreenState extends ConsumerState<HubScreen> {
 
   // Función para recargar datos al deslizar
   Future<void> _refreshData() async {
-    ref.invalidate(adminEventsListProvider);
-    ref.invalidate(newsProvider);
-    await Future.delayed(const Duration(milliseconds: 800));
+    ref.refresh(adminEventsListProvider);
+    ref.refresh(newsProvider);
+    ref.refresh(sponsorsListProvider);
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   @override
@@ -37,13 +45,13 @@ class _HubScreenState extends ConsumerState<HubScreen> {
     // 1. LEER ESTADOS
     final selectedFilter = ref.watch(hubFilterProvider);
     final eventsAsync = ref.watch(adminEventsListProvider);
-    // authState ya no se usa aquí en el build principal, solo en el Drawer
+    final sponsorsAsync = ref.watch(sponsorsListProvider);
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.grey[50],
 
-      // --- A. MENÚ LATERAL ---
+      // --- A. MENÚ LATERAL (RESTAURADO) ---
       endDrawer: const _HubSideMenu(),
 
       // --- PULL TO REFRESH ---
@@ -54,7 +62,7 @@ class _HubScreenState extends ConsumerState<HubScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // --- B. CABECERA (LIMPIA) ---
+            // --- B. CABECERA ---
             SliverAppBar(
               title: const Text(
                 "VIVE TORRE DEL MAR",
@@ -70,14 +78,11 @@ class _HubScreenState extends ConsumerState<HubScreen> {
               elevation: 0,
               centerTitle: false,
               actions: [
-                // HEMOS ELIMINADO EL CIRCLE AVATAR DE AQUÍ
-
-                // Botón Menú Hamburguesa
                 IconButton(
                   icon: const Icon(Icons.menu, color: Colors.black, size: 28),
                   onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
                 ),
-                const SizedBox(width: 12), // Un poco de margen a la derecha
+                const SizedBox(width: 12),
               ],
             ),
 
@@ -160,13 +165,15 @@ class _HubScreenState extends ConsumerState<HubScreen> {
               ),
             ),
 
-            // --- E. LISTA DE EVENTOS ---
+            // --- E. LISTA DE EVENTOS (CON ERRORVIEW) ---
             eventsAsync.when(
               loading: () => const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
               ),
-              error: (err, _) =>
-                  SliverToBoxAdapter(child: Center(child: Text("Error: $err"))),
+              error: (err, _) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: ErrorView(error: err, onRetry: _refreshData),
+              ),
               data: (events) {
                 final filteredEvents = events.where((e) {
                   final status = e.status.toLowerCase().trim();
@@ -214,56 +221,101 @@ class _HubScreenState extends ConsumerState<HubScreen> {
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 10)),
 
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 150,
-                  mainAxisExtent: 80,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
+            sponsorsAsync.when(
+              loading: () => const SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 80,
+                  child: Center(child: CircularProgressIndicator()),
                 ),
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  if (AppData.sponsors.isEmpty) return const SizedBox();
-                  final s = AppData.sponsors[index % AppData.sponsors.length];
-                  final String? url = s['url'];
-                  final String imageUrl = s['logo']!;
-
-                  return Material(
+              ),
+              error: (err, _) => SliverToBoxAdapter(
+                child: Container(
+                  height: 100,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
                     color: Colors.white,
-                    elevation: 2,
                     borderRadius: BorderRadius.circular(12),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: url != null && url.isNotEmpty
-                          ? () async {
-                              final uri = Uri.parse(url);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(
-                                  uri,
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              }
-                            }
-                          : null,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Center(
-                          child: Image.network(
-                            imageUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Icon(
-                                  Icons.broken_image,
-                                  color: Colors.grey,
-                                ),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: ErrorView(
+                    error: err,
+                    isCompact: true,
+                    onRetry:
+                        _refreshData, // Usamos la función de recarga general
+                  ),
+                ),
+              ),
+              data: (sponsors) {
+                if (sponsors.isEmpty)
+                  return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+                return SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 150,
+                          mainAxisExtent: 80,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final sponsor = sponsors[index];
+
+                      return Material(
+                        color: Colors.white,
+                        elevation: 2,
+                        borderRadius: BorderRadius.circular(12),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap:
+                              (sponsor.websiteUrl != null &&
+                                  sponsor.websiteUrl!.isNotEmpty)
+                              ? () async {
+                                  final uri = Uri.parse(sponsor.websiteUrl!);
+                                  if (await canLaunchUrl(uri)) {
+                                    await launchUrl(
+                                      uri,
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                  }
+                                }
+                              : null,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Center(
+                              child: Image.network(
+                                sponsor.logoUrl,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(
+                                          Icons.broken_image,
+                                          color: Colors.grey,
+                                          size: 20,
+                                        ),
+                                        Text(
+                                          sponsor.name,
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  );
-                }, childCount: AppData.sponsors.length),
-              ),
+                      );
+                    }, childCount: sponsors.length),
+                  ),
+                );
+              },
             ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 50)),
@@ -276,7 +328,7 @@ class _HubScreenState extends ConsumerState<HubScreen> {
 
 // --- WIDGETS AUXILIARES ---
 
-// 1. MENÚ LATERAL CON AVATAR
+// 1. MENÚ LATERAL CON AVATAR (RESTAURADO)
 class _HubSideMenu extends ConsumerWidget {
   const _HubSideMenu();
 
@@ -291,15 +343,14 @@ class _HubSideMenu extends ConsumerWidget {
     if (user != null) {
       final metadata = user.userMetadata;
       if (metadata != null) {
-        // 1. Nombre
         if (metadata.containsKey('name')) {
           displayName = metadata['name'];
-        } else if (metadata.containsKey('full_name'))
+        } else if (metadata.containsKey('full_name')) {
           displayName = metadata['full_name'];
-        else if (user.email != null)
+        } else if (user.email != null) {
           displayName = user.email!.split('@')[0];
+        }
 
-        // 2. Avatar (CORRECCIÓN IMPORTANTE)
         if (metadata.containsKey('avatar_url')) {
           avatarUrl = metadata['avatar_url'];
         }
@@ -310,7 +361,6 @@ class _HubSideMenu extends ConsumerWidget {
       width: MediaQuery.of(context).size.width * 0.85,
       child: Column(
         children: [
-          // CABECERA USUARIO
           Container(
             padding: const EdgeInsets.only(
               top: 60,
@@ -330,7 +380,6 @@ class _HubSideMenu extends ConsumerWidget {
                   child: CircleAvatar(
                     radius: 35,
                     backgroundColor: Colors.white,
-                    // LÓGICA CORREGIDA: Usamos la URL de Supabase si existe
                     backgroundImage: avatarUrl != null
                         ? NetworkImage(avatarUrl)
                         : null,
@@ -391,12 +440,11 @@ class _HubSideMenu extends ConsumerWidget {
                     ),
                     child: const Text("Iniciar Sesión"),
                   ),
-                ], // if-else
+                ],
               ],
             ),
           ),
 
-          // LISTA DE ENLACES
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
@@ -412,12 +460,12 @@ class _HubSideMenu extends ConsumerWidget {
                     ),
                   ),
                 ),
-                _MenuLink(
+                const _MenuLink(
                   icon: FontAwesomeIcons.globe,
                   label: "Web Oficial ACET",
                   url: "https://www.torredelmar.org/",
                 ),
-                _MenuLink(
+                const _MenuLink(
                   icon: FontAwesomeIcons.calendarDay,
                   label: "Agenda de Eventos",
                   url: "https://www.torredelmar.org/eventos",
@@ -425,7 +473,6 @@ class _HubSideMenu extends ConsumerWidget {
 
                 const Divider(),
 
-                // --- NUEVA SECCIÓN DE REDES SOCIALES EN FILA ---
                 const Padding(
                   padding: EdgeInsets.fromLTRB(20, 10, 20, 10),
                   child: Text(
@@ -443,31 +490,28 @@ class _HubSideMenu extends ConsumerWidget {
                     vertical: 5,
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment
-                        .spaceAround, // Distribuye el espacio uniformemente
-                    children: [
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: const [
                       _DrawerSocialBtn(
                         icon: FontAwesomeIcons.facebook,
-                        color: const Color(0xFF1877F2), // Azul Facebook
+                        color: Color(0xFF1877F2),
                         url:
                             "https://www.facebook.com/acetempresariostorredelmar",
                       ),
                       _DrawerSocialBtn(
                         icon: FontAwesomeIcons.instagram,
-                        color: const Color(0xFFE4405F),
+                        color: Color(0xFFE4405F),
                         url:
                             "https://www.instagram.com/acet_empresarios_torre_del_mar/?hl=es-la",
                       ),
                       _DrawerSocialBtn(
                         icon: FontAwesomeIcons.xTwitter,
-                        color: Colors.black, // Negro X
+                        color: Colors.black,
                         url: "http://www.twitter.com/acettorredelmar/",
                       ),
-                      // Nota: Google+ cerró en 2019, pero si el enlace sigue activo para empresas o es Google My Business, lo dejamos.
                       _DrawerSocialBtn(
-                        icon: FontAwesomeIcons
-                            .google, // Cambiado a Google genérico o MyBusiness
-                        color: const Color(0xFFDB4437), // Rojo Google
+                        icon: FontAwesomeIcons.google,
+                        color: Color(0xFFDB4437),
                         url:
                             "https://plus.google.com/114450006770310707428/posts",
                       ),
@@ -475,12 +519,11 @@ class _HubSideMenu extends ConsumerWidget {
                   ),
                 ),
 
-                // -----------------------------------------------
                 const Divider(),
 
-                _MenuLink(
+                const _MenuLink(
                   icon: Icons.privacy_tip_outlined,
-                  label: "Contacto", // Corregido typo 'Conctacto'
+                  label: "Contacto",
                   url: "https://www.torredelmar.org/contact/",
                 ),
 
@@ -496,13 +539,7 @@ class _HubSideMenu extends ConsumerWidget {
                       final syncService = ref.read(syncServiceProvider);
                       final authRepo = ref.read(authRepositoryProvider);
 
-                      // 1. ¿HAY DATOS PENDIENTES?
                       if (repo.hasPendingData) {
-                        // A. Intentamos sincronizar automáticamente primero (INTENTO SILENCIOSO)
-                        // Nota: Como syncPendingVotes pide un eventId, y aquí quizás no lo tenemos a mano si estamos en el Hub,
-                        // o hay múltiples eventos, lo más seguro es preguntar al usuario.
-
-                        // Mostramos Diálogo de Advertencia
                         final bool? confirmDelete = await showDialog<bool>(
                           context: context,
                           builder: (context) => AlertDialog(
@@ -514,15 +551,11 @@ class _HubSideMenu extends ConsumerWidget {
                             ),
                             actions: [
                               TextButton(
-                                onPressed: () =>
-                                    Navigator.pop(context, false), // Cancelar
+                                onPressed: () => Navigator.pop(context, false),
                                 child: const Text("CANCELAR (RECOMENDADO)"),
                               ),
                               TextButton(
-                                onPressed: () => Navigator.pop(
-                                  context,
-                                  true,
-                                ), // Borrar y Salir
+                                onPressed: () => Navigator.pop(context, true),
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.red,
                                 ),
@@ -531,25 +564,13 @@ class _HubSideMenu extends ConsumerWidget {
                             ],
                           ),
                         );
-
-                        // Si el usuario dice que NO (o toca fuera), cancelamos el logout
                         if (confirmDelete != true) return;
                       }
 
-                      // 2. PROCEDEMOS AL CIERRE (Si no había pendientes o el usuario aceptó borrarlos)
-
-                      // A. Borrado local
                       await repo.clearLocalData();
-
-                      // B. Logout en Supabase
                       await authRepo.signOut();
-
-                      // C. Cerrar pantalla/menú
                       if (context.mounted) {
-                        // Si estamos en un Drawer (Hub)
                         if (Navigator.canPop(context)) Navigator.pop(context);
-                        // Si estamos en ProfileScreen (que es una pantalla pusheada)
-                        // context.pop() o similar dependiendo de donde estés
                       }
                     },
                   ),
@@ -569,7 +590,7 @@ class _HubSideMenu extends ConsumerWidget {
   }
 }
 
-// --- AÑADIR ESTE PEQUEÑO WIDGET AL FINAL DE TU ARCHIVO ---
+// 2. BOTONES SOCIALES DRAWER (RESTAURADO)
 class _DrawerSocialBtn extends StatelessWidget {
   final IconData icon;
   final String url;
@@ -595,7 +616,7 @@ class _DrawerSocialBtn extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: color.withOpacity(0.1), // Fondo suave del color de la marca
+          color: color.withOpacity(0.1),
         ),
         child: FaIcon(icon, size: 24, color: color),
       ),
@@ -603,7 +624,7 @@ class _DrawerSocialBtn extends StatelessWidget {
   }
 }
 
-// 2. CARRUSEL DE NOTICIAS
+// 3. CARRUSEL DE NOTICIAS (CORREGIDO CON ERRORVIEW)
 class _NewsCarouselSection extends ConsumerWidget {
   const _NewsCarouselSection();
 
@@ -614,6 +635,7 @@ class _NewsCarouselSection extends ConsumerWidget {
     return SizedBox(
       height: 180,
       child: newsAsync.when(
+        // LOADING
         loading: () => ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -625,32 +647,41 @@ class _NewsCarouselSection extends ConsumerWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Center(
-              child: CircularProgressIndicator(strokeWidth: 2),
+            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        ),
+        
+        // 🛡️ ERROR (CORREGIDO PARA QUE SE VEA SIEMPRE)
+        error: (err, stack) => Center( // Center asegura que no se expanda raro
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+               color: Colors.grey[50],
+               borderRadius: BorderRadius.circular(12),
+               border: Border.all(color: Colors.grey.shade300)
+            ),
+            child: ErrorView(
+              error: err, 
+              isCompact: true, 
+              onRetry: () => ref.refresh(newsProvider),
             ),
           ),
         ),
-        error: (err, stack) => Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.wifi_off, color: Colors.grey),
-              const SizedBox(height: 5),
-              Text(
-                "No se pudieron cargar noticias",
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
-            ],
-          ),
-        ),
+        
+        // DATA
         data: (newsList) {
-          if (newsList.isEmpty) return const SizedBox();
+          if (newsList.isEmpty) {
+             return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                   color: Colors.grey[100],
+                   borderRadius: BorderRadius.circular(12)
+                ),
+                child: const Center(child: Text("No hay noticias destacadas")),
+             );
+          }
 
           return ListView.builder(
             scrollDirection: Axis.horizontal,
@@ -673,57 +704,32 @@ class _NewsCarouselSection extends ConsumerWidget {
                           borderRadius: 0,
                         ),
                       ),
+                      // ... (El resto del diseño de la tarjeta de noticias se mantiene igual)
+                      // Si lo necesitas completo dímelo, pero solo cambia el 'error' de arriba.
                       Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.9),
-                            ],
+                            colors: [Colors.transparent, Colors.black.withOpacity(0.9)],
                             stops: const [0.5, 1.0],
                           ),
                         ),
                       ),
                       Positioned(
-                        bottom: 12,
-                        left: 12,
-                        right: 12,
+                        bottom: 12, left: 12, right: 12,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.blue[900],
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                item.date,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: Colors.blue[900], borderRadius: BorderRadius.circular(4)),
+                              child: Text(item.date, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              item.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            Text(item.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), maxLines: 2, overflow: TextOverflow.ellipsis),
                           ],
                         ),
                       ),
@@ -739,14 +745,13 @@ class _NewsCarouselSection extends ConsumerWidget {
   }
 }
 
-// 3. TARJETA DE EVENTO
+// 4. TARJETA DE EVENTO
 class _HubEventCard extends StatelessWidget {
   final EventModel event;
   const _HubEventCard({required this.event});
 
   @override
   Widget build(BuildContext context) {
-    // 1. RECUPERAMOS LA APARIENCIA (Color, Texto, Icono)
     final appearance = EventTypeHelper.getAppearance(event.type);
 
     return GestureDetector(
@@ -770,10 +775,8 @@ class _HubEventCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // IMAGEN DE FONDO
               SmartImageContainer(imageUrl: event.bgImageUrl, borderRadius: 0),
-              
-              // DEGRADADO (Para que se lea el texto)
+
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -783,15 +786,13 @@ class _HubEventCard extends StatelessWidget {
                   ),
                 ),
               ),
-              
-              // TEXTOS Y ETIQUETA
+
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // TÍTULO DEL EVENTO
                     Text(
                       event.name.toUpperCase(),
                       style: const TextStyle(
@@ -803,21 +804,25 @@ class _HubEventCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
 
-                    // --- AQUÍ ESTABA LA FECHA, AHORA PONEMOS LA ETIQUETA ---
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
-                        color: appearance.color, // Color dinámico (Naranja, Morado...)
+                        color: appearance.color,
                         borderRadius: BorderRadius.circular(8),
-                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black26, blurRadius: 4),
+                        ],
                       ),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min, // Ocupa solo lo necesario
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(appearance.icon, color: Colors.white, size: 14),
                           const SizedBox(width: 6),
                           Text(
-                            appearance.label.toUpperCase(), // "RUTA DE LA TAPA", etc.
+                            appearance.label.toUpperCase(),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -828,7 +833,6 @@ class _HubEventCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // -------------------------------------------------------
                   ],
                 ),
               ),
@@ -839,6 +843,8 @@ class _HubEventCard extends StatelessWidget {
     );
   }
 }
+
+// 5. CHIP DE FILTRO
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;
@@ -875,6 +881,7 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
+// 6. ESTADO VACÍO
 class _EmptyState extends StatelessWidget {
   final String filter;
   const _EmptyState({required this.filter});
@@ -899,6 +906,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+// 7. MENU LINK (RESTAURADO TAMBIÉN)
 class _MenuLink extends StatelessWidget {
   final IconData icon;
   final String label;

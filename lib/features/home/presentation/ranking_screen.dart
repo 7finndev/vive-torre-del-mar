@@ -1,7 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart'; // Necesario para el modelo
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 
 class RankingScreen extends ConsumerStatefulWidget {
@@ -25,8 +27,6 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
     final eventId = ref.read(currentEventIdProvider);
     
     try {
-      // Opcional: poner _isLoading = true si quieres que se borre la lista mientras carga
-      // Si no lo pones, se mantiene la lista vieja hasta que llegue la nueva (más fluido)
       final List<dynamic> data = await Supabase.instance.client
           .rpc('get_event_ranking', params: {'target_event_id': eventId});
 
@@ -39,6 +39,47 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
       print("Error cargando ranking: $e");
+    }
+  }
+
+  // --- 🧭 LÓGICA DE NAVEGACIÓN INTELIGENTE ---
+  Future<void> _navigateToDetail(int establishmentId) async {
+    // 1. Buscamos primero en la lista local (Rápido)
+    final localEstablishments = ref.read(establishmentsListProvider);
+    
+    if (localEstablishments.hasValue) {
+      try {
+        final fullBar = localEstablishments.value!.firstWhere((e) => e.id == establishmentId);
+        context.push('/detail', extra: fullBar);
+        return; // ¡Éxito! Nos ahorramos la llamada a la BD
+      } catch (_) {
+        // No estaba en la lista local, seguimos al plan B
+      }
+    }
+
+    // 2. Plan B: Buscar en Supabase (Seguro)
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(content: Text("Cargando información..."), duration: Duration(milliseconds: 500))
+      );
+
+      final response = await Supabase.instance.client
+          .from('establishments')
+          .select()
+          .eq('id', establishmentId)
+          .single();
+      
+      final bar = EstablishmentModel.fromJson(response);
+      
+      if (mounted) {
+         context.push('/detail', extra: bar);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No se pudo cargar la ficha del local"), backgroundColor: Colors.red)
+        );
+      }
     }
   }
 
@@ -55,13 +96,12 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
       body: RefreshIndicator(
         color: Colors.orange,
         onRefresh: () async {
-          // 🔥 RECARGAMOS EL RANKING AL DESLIZAR
           await _loadRanking();
         },
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _ranking.isEmpty
-                ? ListView( // Usamos ListView para poder hacer scroll y refrescar aunque esté vacío
+                ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: const [
                        SizedBox(height: 100),
@@ -69,7 +109,7 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
                     ],
                   )
                 : ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(), // IMPORTANTE
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
                     itemCount: _ranking.length,
                     itemBuilder: (context, index) {
@@ -79,6 +119,7 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
                       final bool isWinner = item['is_winner'] ?? false;
                       final double rating = (item['average_rating'] as num).toDouble();
                       final int votes = (item['vote_count'] as num).toInt();
+                      final int establishmentId = (item['establishment_id'] as num).toInt(); // ID necesario
                       
                       // Estilos Podio
                       Color borderColor = Colors.transparent;
@@ -90,7 +131,7 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
                         borderColor = const Color(0xFFFFD700);
                         numberBgColor = const Color(0xFFFFF8E1);
                         numberTextColor = const Color(0xFFFFD700);
-                        scale = 1.05; 
+                        scale = 1.02; 
                       } else if (rank == 2) { 
                         borderColor = const Color(0xFFC0C0C0);
                         numberBgColor = const Color(0xFFF5F5F5);
@@ -103,109 +144,116 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
 
                       return Transform.scale(
                         scale: scale,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05), 
-                                blurRadius: 10, 
-                                offset: const Offset(0,4)
-                              )
-                            ],
-                            border: Border.all(
-                              color: borderColor, 
-                              width: rank <= 3 ? 2 : 0
+                        child: GestureDetector( // <--- AÑADIDO GESTO
+                          onTap: () => _navigateToDetail(establishmentId),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05), 
+                                  blurRadius: 10, 
+                                  offset: const Offset(0,4)
+                                )
+                              ],
+                              border: Border.all(
+                                color: borderColor, 
+                                width: rank <= 3 ? 2 : 0
+                              ),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 60,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  color: numberBgColor,
-                                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    "#$rank",
-                                    style: TextStyle(
-                                      fontSize: 24, 
-                                      fontWeight: FontWeight.w900, 
-                                      color: numberTextColor,
-                                      fontStyle: FontStyle.italic
+                            child: Row(
+                              children: [
+                                // NÚMERO
+                                Container(
+                                  width: 60,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    color: numberBgColor,
+                                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      "#$rank",
+                                      style: TextStyle(
+                                        fontSize: 24, 
+                                        fontWeight: FontWeight.w900, 
+                                        color: numberTextColor,
+                                        fontStyle: FontStyle.italic
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              
-                              CachedNetworkImage(
-                                imageUrl: item['image_url'] ?? '',
-                                width: 80, 
-                                height: 100, 
-                                fit: BoxFit.cover,
-                                errorWidget: (_,__,___) => Container(
+                                
+                                // FOTO
+                                CachedNetworkImage(
+                                  imageUrl: item['image_url'] ?? '',
                                   width: 80, 
-                                  color: Colors.grey[200], 
-                                  child: const Icon(Icons.restaurant, color: Colors.grey)
-                                ),
-                              ),
-                              
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        item['product_name'] ?? 'Tapa', 
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), 
-                                        maxLines: 1, 
-                                        overflow: TextOverflow.ellipsis
-                                      ),
-                                      Text(
-                                        item['establishment_name'] ?? 'Local', 
-                                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                        maxLines: 1,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.star_rounded, color: Colors.orange, size: 20),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            rating.toStringAsFixed(1),
-                                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                                          ),
-                                          const Spacer(),
-                                          Text(
-                                            "$votes votos",
-                                            style: TextStyle(color: Colors.grey[400], fontSize: 10),
-                                          ),
-                                        ],
-                                      )
-                                    ],
+                                  height: 100, 
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_,__,___) => Container(
+                                    width: 80, 
+                                    color: Colors.grey[200], 
+                                    child: const Icon(Icons.restaurant, color: Colors.grey)
                                   ),
                                 ),
-                              ),
+                                
+                                // TEXTOS
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          item['product_name'] ?? 'Tapa', 
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), 
+                                          maxLines: 1, 
+                                          overflow: TextOverflow.ellipsis
+                                        ),
+                                        Text(
+                                          item['establishment_name'] ?? 'Local', 
+                                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                          maxLines: 1,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.star_rounded, color: Colors.orange, size: 20),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              rating.toStringAsFixed(1),
+                                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              "$votes votos",
+                                              style: TextStyle(color: Colors.grey[400], fontSize: 10),
+                                            ),
+                                          ],
+                                        )
+                                      ],
+                                    ),
+                                  ),
+                                ),
 
-                              if (isWinner)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 16.0),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: const [
-                                      Icon(Icons.emoji_events, color: Color(0xFFFFD700), size: 32),
-                                      Text("WINNER", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Color(0xFFFFD700)))
-                                    ],
+                                // BADGE GANADOR
+                                if (isWinner)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 16.0),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(Icons.emoji_events, color: Color(0xFFFFD700), size: 32),
+                                        Text("WINNER", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Color(0xFFFFD700)))
+                                      ],
+                                    ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       );

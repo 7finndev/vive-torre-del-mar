@@ -15,7 +15,7 @@ class _SplashScreenState extends State<SplashScreen> {
     _navigateToHome();
   }
 
-  _navigateToHome() async {
+  Future<void> _navigateToHome() async {
     // 1. Esperamos unos segundos para "hacer marca" (branding)
     await Future.delayed(const Duration(seconds: 2));
 

@@ -56,7 +56,7 @@ class DashboardRepository {
       //Recorremos el JSON:
       final eventData = item['events'] as Map<String, dynamic>?;
       if(eventData != null) {
-        final type = (eventData['type'] as String ?? '').toLowerCase();
+        final type = (eventData['type'] as String? ?? '').toLowerCase();
 
         // Clasificacmos según el tipo de Evento
         if(type == 'gastronomic' || type == 'tapas') {

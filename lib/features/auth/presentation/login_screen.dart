@@ -1,11 +1,10 @@
+import 'dart:async';
+import 'dart:io'; 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
-import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_provider.dart';
-import 'dart:io'; // Para Platform
-import 'package:flutter/foundation.dart'; // Para kIsWeb
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:torre_del_mar_app/main.dart'; // Para hacer la consulta del perfil
+import 'package:torre_del_mar_app/main.dart'; 
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,10 +15,95 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _passwordController = TextEditingController(); 
+  
   bool _isLoading = false;
-  bool _isLoginMode = true;
-  bool _isPasswordVisible = false; //Por defecto, oculta
+  bool _emailSent = false; 
+  bool _isAdminMode = false; // Lógica Admin (NUEVA)
+  bool _isPasswordVisible = false;
+
+  late final StreamSubscription<AuthState> _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (data.session != null && mounted) {
+        // El usuario ha entrado. Aquí podrías redirigir si GoRouter no lo hace solo.
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _authSubscription.cancel();
+    super.dispose();
+  }
+
+  // --- LÓGICA DE ENVÍO (Mantenemos la corrección de URL) ---
+  Future<void> _sendMagicLink() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) return _showError("Por favor, escribe tu email");
+
+    setState(() => _isLoading = true);
+    try {
+      // OJO: Asegúrate de que esto coincide con tu AndroidManifest.xml
+      // En tu snippet pusiste 'vivetorredelmar', antes era 'torredelmar'.
+      // He puesto la de tu último código:
+      String redirectUrl = kIsWeb 
+          ? 'https://vive_torre_del_mar.7finn.es' 
+          : 'io.supabase.vivetorredelmar://login-callback';
+
+      await Supabase.instance.client.auth.signInWithOtp(
+        email: email,
+        emailRedirectTo: redirectUrl,
+      );
+
+      if (mounted) setState(() { _isLoading = false; _emailSent = true; });
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
+  Future<void> _loginWithPassword() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) return _showError("Rellena todos los campos");
+
+    setState(() => _isLoading = true);
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      // Aquí no hace falta cambiar estado manual, el auth listener lo detectará
+      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
+  void _handleError(Object e) {
+    if (mounted) setState(() => _isLoading = false);
+    String msg = "Error de conexión o envío.";
+    if (e.toString().contains("Invalid login")) msg = "Credenciales incorrectas.";
+    // Gestión bonita de errores de red
+    final err = e.toString().toLowerCase();
+    if (err.contains("socketexception") || err.contains("network")) {
+       msg = "⚠️ Sin conexión a internet.";
+    } else if (err.contains("rate limit")) {
+       msg = "⏳ Has pedido muchos enlaces. Espera un poco.";
+    }
+    _showError(msg);
+  }
+
+  void _showError(String msg) {
+    rootScaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,207 +111,161 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       appBar: AppBar(title: const Text("Acceso")),
       body: Center(
         child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _isLoginMode ? "Iniciar Sesión" : "Crear Cuenta",
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: "Email",
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _passwordController,
-                    
-                    obscureText: !_isPasswordVisible, 
-
-                    decoration: InputDecoration( // CORRECCIÓN: Quitamos 'const' aquí
-                      labelText: "Contraseña",
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.lock),
-                      
-                      // 3. AÑADIDO: Botón del ojo
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible 
-                              ? Icons.visibility 
-                              : Icons.visibility_off,
-                          color: Colors.grey,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  if (_isLoading)
-                    const CircularProgressIndicator()
-                  else
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _submit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                        ),
-                        child: Text(_isLoginMode ? "Entrar" : "Registrarse"),
-                      ),
-                    ),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isLoginMode = !_isLoginMode;
-                      });
-                    },
-                    child: Text(
-                      _isLoginMode
-                          ? "¿No tienes cuenta? Regístrate"
-                          : "¿Ya tienes cuenta? Inicia Sesión",
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          padding: const EdgeInsets.all(24.0),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: _emailSent ? _buildSuccessView() : _buildFormView(),
           ),
         ),
       ),
     );
   }
 
-  Future<void> _submit() async {
-    setState(() => _isLoading = true);
-    try {
-      final auth = ref.read(authRepositoryProvider);
-
-      // --- LOGICA PARA SABER SI ESTAMOS EN PLATAFORMA ADMIN ---
-      // Si es Web O es (Linux/Windows/Mac), aplicamos seguridad estricta.
-      // Si es móvil, dejamos pasar a cualquiera.
-      bool isAdminPlatform = kIsWeb || (Platform.isLinux || Platform.isWindows || Platform.isMacOS);
-
-      if (_isLoginMode) {
-        // --- LOGIN ---
-        await auth.signIn(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
-        );
-
-        // ✅ AQUI INYECTAMOS LA SEGURIDAD (Justo tras el login exitoso)
-        if (isAdminPlatform) {
-          final user = Supabase.instance.client.auth.currentUser;
-          if (user != null) {
-            // Consultamos el rol en la tabla profiles
-            final profileData = await Supabase.instance.client
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .maybeSingle();
-            
-            final role = profileData?['role'] ?? 'user'; // Si no tiene rol, asumimos 'user'
-
-            if (role != 'admin') {
-              // ⛔ NO ES ADMIN: Lo echamos
-              await auth.signOut();
-              throw Exception("ACCESS_DENIED_ADMIN"); // Lanzamos error para saltar al catch
-            }
-          }
-        }
-        // ✅ FIN DE LA SEGURIDAD
+  // --- VISTA FORMULARIO (LA NUEVA CON ADMIN - QUE SÍ TE GUSTABA) ---
+  Widget _buildFormView() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(_isAdminMode ? Icons.admin_panel_settings : Icons.mark_email_unread_outlined, 
+             size: 80, color: _isAdminMode ? Colors.blueGrey : Colors.orange),
+        const SizedBox(height: 20),
         
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Sesión iniciada correctamente")),
-          );
-          ref.read(syncServiceProvider).syncPendingVotes();
-        }
-
-      } else {
-        // --- REGISTRO ---
-        await auth.signUp(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
-        );
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("¡Cuenta creada!"),
-              backgroundColor: Colors.green,
-            ),
-          );
-          
-          // Intentar autologin tras registro
-          try {
-             await auth.signIn(
-              _emailController.text.trim(),
-              _passwordController.text.trim(),
-            );
-            
-            // ✅ SEGURIDAD TAMBIÉN EN REGISTRO (Si alguien se registra desde el panel admin)
-            if (isAdminPlatform) {
-               // Como acaba de registrarse, su rol por defecto en BBDD es 'user'.
-               // Así que lo bloqueamos directamente sin consultar.
-               await auth.signOut();
-               throw Exception("ACCESS_DENIED_NEW_USER");
-            }
-
-          } catch (e) {
-             // Si el autologin falla o es denegado
-             if (e.toString().contains("ACCESS_DENIED")) rethrow; // Pasamos el error al catch principal
-             
-             setState(() => _isLoginMode = true);
-          }
-        }
-      }
-} catch (e) {
-      // Ya no comprobamos 'if (mounted)' para el mensaje global, 
-      // porque la llave global siempre está montada.
-      
-      String message = "Error desconocido";
-      
-      // Mensajes personalizados
-      if (e.toString().contains("Invalid login")) message = "Credenciales incorrectas.";
-      if (e.toString().contains("already registered")) message = "Email ya registrado.";
-      
-      if (e.toString().contains("ACCESS_DENIED_ADMIN")) {
-        message = "⛔ Acceso Denegado: No tienes permisos de Administrador.";
-      }
-      if (e.toString().contains("ACCESS_DENIED_NEW_USER")) {
-        message = "Cuenta creada, pero no tienes permisos de Administrador.";
-      }
-      
-      // USAMOS LA LLAVE GLOBAL
-      rootScaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(
-          content: Text(message), 
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4), // Le damos tiempo para leer
+        Text(
+          _isAdminMode ? "Acceso Administrativo" : "Bienvenido a la Ruta",
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
         ),
-      );
-      
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+        const SizedBox(height: 10),
+        
+        Text(
+          _isAdminMode 
+            ? "Introduce tus credenciales de gestor."
+            : "Olvídate de las contraseñas.\nIntroduce tu email para entrar al instante.",
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.grey),
+        ),
+        const SizedBox(height: 30),
+        
+        TextField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            labelText: "Tu correo electrónico",
+            hintText: "ejemplo@correo.com",
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.email),
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        if (_isAdminMode) ...[
+          TextField(
+            controller: _passwordController,
+            obscureText: !_isPasswordVisible,
+            decoration: InputDecoration(
+              labelText: "Contraseña",
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.lock),
+              suffixIcon: IconButton(
+                icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
+                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+              ),
+            ),
+          ),
+          const SizedBox(height: 30),
+        ],
+
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : (_isAdminMode ? _loginWithPassword : _sendMagicLink),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _isAdminMode ? Colors.blueGrey : Colors.blue[900], // Azul para usuario (tu antiguo), Gris para Admin
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              elevation: 4,
+            ),
+            child: _isLoading 
+              ? const SizedBox(
+                  height: 20, width: 20, 
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                )
+              : Text(
+                  _isAdminMode ? "ENTRAR COMO ADMIN" : "ENVIAR ENLACE MÁGICO ✨",
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        TextButton(
+          onPressed: () {
+            setState(() {
+              _isAdminMode = !_isAdminMode;
+              _emailSent = false;
+            });
+          },
+          child: Text(
+            _isAdminMode 
+              ? "¿Eres usuario? Entrar con enlace mágico" 
+              : "¿Eres administrador? Entrar con contraseña",
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- VISTA ÉXITO (LA ANTIGUA - RESTAURADA EL RECUADRO AZUL) ---
+  Widget _buildSuccessView() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.check_circle_outline, size: 80, color: Colors.green),
+        const SizedBox(height: 20),
+        const Text(
+          "¡Correo Enviado!",
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 15),
+        
+        // AQUÍ ESTÁ EL CONTENEDOR AZUL QUE TE GUSTABA
+        Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.blue.shade200)
+          ),
+          child: Column(
+            children: [
+              const Text("Hemos enviado un enlace de acceso a:", style: TextStyle(color: Colors.black54)),
+              const SizedBox(height: 5),
+              Text(
+                _emailController.text,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        const Text(
+          "👉 Abre tu aplicación de correo en este móvil y pulsa el enlace para entrar.",
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 15),
+        ),
+        const SizedBox(height: 40),
+        TextButton.icon(
+          onPressed: () => setState(() => _emailSent = false),
+          icon: const Icon(Icons.arrow_back),
+          label: const Text("Usar otro correo / Reintentar"),
+        ),
+        const SizedBox(height: 10),
+        const Text("¿No llega? Revisa la carpeta Spam.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+      ],
+    );
   }
 }

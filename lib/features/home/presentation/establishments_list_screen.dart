@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/ranking_provider.dart';
 import 'package:torre_del_mar_app/features/home/presentation/widgets/establishment_card.dart';
+import 'package:torre_del_mar_app/core/widgets/error_view.dart'; // <--- IMPORTA ESTO
 
 class EstablishmentsListScreen extends ConsumerStatefulWidget {
   final int eventId;
@@ -16,6 +17,15 @@ class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScr
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  // Función de Recarga
+  void _reloadData() {
+    //Importante: Invalidamos al Padre primero
+    ref.invalidate(currentEventProvider);
+    //Luego a los hijos
+    ref.invalidate(establishmentsListProvider);
+    ref.invalidate(rankingListProvider);
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -24,13 +34,10 @@ class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScr
 
   @override
   Widget build(BuildContext context) {
-    // 1. OBTENER DATOS
     final establishmentsAsync = ref.watch(establishmentsListProvider);
-    final rankingAsync = ref.watch(rankingListProvider);
     
-    // 2. OBTENER COLOR DEL EVENTO (Para la ruedecita de carga)
     final eventAsync = ref.watch(currentEventProvider);
-    Color themeColor = Colors.orange; // Color por defecto
+    Color themeColor = Colors.orange;
     if (eventAsync.hasValue && eventAsync.value != null) {
       try {
         String hex = eventAsync.value!.themeColorHex.replaceAll('#', '');
@@ -41,24 +48,20 @@ class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScr
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      
-      // 1. ENVOLVEMOS CON REFRESH INDICATOR
       body: RefreshIndicator(
         color: themeColor,
         backgroundColor: Colors.white,
         onRefresh: () async {
-          // Invocamos la recarga de los proveedores
-          ref.invalidate(establishmentsListProvider);
-          ref.invalidate(rankingListProvider);
-          // Esperamos un segundo para efecto visual
+          //Utilizamos la funcion _reloadData() aqui:
+          _reloadData();
+          //Sustituyendo a estas dos lineas:
+          //--> ref.invalidate(establishmentsListProvider);
+          //--> ref.invalidate(rankingListProvider);
           await Future.delayed(const Duration(seconds: 1));
         },
         child: CustomScrollView(
-          // 2. SIEMPRE SCROLLABLE (para que funcione el gesto)
           physics: const AlwaysScrollableScrollPhysics(),
-          
           slivers: [
-            // A. BARRA DE BÚSQUEDA FLOTANTE
             SliverAppBar(
               floating: true,
               pinned: false,
@@ -85,19 +88,25 @@ class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScr
               ),
             ),
 
-            // C. LISTA DE ESTABLECIMIENTOS (FILTRADA)
+            // AQUÍ CORREGIMOS EL ERROR:
             establishmentsAsync.when(
               loading: () => const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
               ),
-              error: (err, _) => SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text('Error cargando locales: $err'),
+              
+              // ✅ USAMOS TU WIDGET ERRORVIEW (Envuelto en Sliver)
+              error: (err, _) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: ErrorView(
+                  error: err,
+                  // Aqui tambien utilizamos la funcion _reloadData();
+                  onRetry: () => _reloadData(),
+                  //Sustituyendo esta linea:
+                  // -->onRetry: () => ref.invalidate(establishmentsListProvider),
                 ),
               ),
+
               data: (list) {
-                // Lógica de filtrado
                 final filtered = list.where((est) {
                   final q = _searchQuery.toLowerCase();
                   final matchName = est.name.toLowerCase().contains(q);
@@ -107,7 +116,6 @@ class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScr
 
                 if (filtered.isEmpty) {
                   return const SliverFillRemaining(
-                    // Importante: Si está vacío, permitimos scroll para poder refrescar
                     hasScrollBody: false, 
                     child: Center(child: Text("No se encontraron resultados")),
                   );

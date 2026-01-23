@@ -38,6 +38,23 @@ final establishmentRepositoryProvider =
 
 typedef EstablishmentRepositoryRef
     = AutoDisposeProviderRef<EstablishmentRepository>;
+String _$passportRepositoryHash() =>
+    r'ff2638d27de373fc1e6b6357536e621433255691';
+
+/// See also [passportRepository].
+@ProviderFor(passportRepository)
+final passportRepositoryProvider =
+    AutoDisposeProvider<PassportRepository>.internal(
+  passportRepository,
+  name: r'passportRepositoryProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$passportRepositoryHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef PassportRepositoryRef = AutoDisposeProviderRef<PassportRepository>;
 String _$establishmentsListHash() =>
     r'063787dfca766f3fc7a16a87eef34cbe73fcf657';
 
@@ -89,24 +106,7 @@ final productsListProvider =
 );
 
 typedef ProductsListRef = AutoDisposeFutureProviderRef<List<ProductModel>>;
-String _$passportRepositoryHash() =>
-    r'ff2638d27de373fc1e6b6357536e621433255691';
-
-/// See also [passportRepository].
-@ProviderFor(passportRepository)
-final passportRepositoryProvider =
-    AutoDisposeProvider<PassportRepository>.internal(
-  passportRepository,
-  name: r'passportRepositoryProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$passportRepositoryHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
-
-typedef PassportRepositoryRef = AutoDisposeProviderRef<PassportRepository>;
-String _$currentEventHash() => r'b8c60972fd5ed9523ac0a4d1bca3fef7a32b8ed7';
+String _$currentEventHash() => r'818f9c011bc5f3a0a1860d1b25676b2b901f8df6';
 
 /// See also [currentEvent].
 @ProviderFor(currentEvent)
@@ -120,22 +120,22 @@ final currentEventProvider = AutoDisposeFutureProvider<EventModel>.internal(
 );
 
 typedef CurrentEventRef = AutoDisposeFutureProviderRef<EventModel>;
-String _$activeEventsListHash() => r'fc9e37cac919da6ca8a9efceaeeb45a0e1c0eb12';
+String _$adminEventsListHash() => r'eb8ae8d5ccb28a93c9648c32ab2c23f5712c1911';
 
-/// See also [activeEventsList].
-@ProviderFor(activeEventsList)
-final activeEventsListProvider =
+/// See also [adminEventsList].
+@ProviderFor(adminEventsList)
+final adminEventsListProvider =
     AutoDisposeFutureProvider<List<EventModel>>.internal(
-  activeEventsList,
-  name: r'activeEventsListProvider',
+  adminEventsList,
+  name: r'adminEventsListProvider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
       ? null
-      : _$activeEventsListHash,
+      : _$adminEventsListHash,
   dependencies: null,
   allTransitiveDependencies: null,
 );
 
-typedef ActiveEventsListRef = AutoDisposeFutureProviderRef<List<EventModel>>;
+typedef AdminEventsListRef = AutoDisposeFutureProviderRef<List<EventModel>>;
 String _$allEstablishmentsListHash() =>
     r'c075aa87774f81cdd330313faaf6665949b3a14b';
 

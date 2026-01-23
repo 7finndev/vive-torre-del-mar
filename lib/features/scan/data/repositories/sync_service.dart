@@ -3,7 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/scan/data/models/passport_entry_model.dart';
-import 'package:torre_del_mar_app/features/scan/presentation/providers/sync_provider.dart';
+
+part 'sync_service.g.dart';
 
 class SyncService {
   final SupabaseClient _supabase;

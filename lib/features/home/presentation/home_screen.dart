@@ -1,33 +1,45 @@
-// Para el shuffle (aleatorio)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart'; 
-import 'package:torre_del_mar_app/core/constants/app_data.dart';
+
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
 import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:torre_del_mar_app/core/utils/event_type_helper.dart';
 
-// IMPORTAMOS LOS WIDGETS NUEVOS
+// WIDGETS
 import 'package:torre_del_mar_app/features/home/presentation/widgets/smart_recommendation_card.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
+import 'package:torre_del_mar_app/features/home/presentation/widgets/next_stop_card.dart';
+
+// 🆕 IMPORTANTE: Importar el ErrorView
+import 'package:torre_del_mar_app/core/widgets/error_view.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // CARGA DE DATOS
+    // 1. CARGA DE DATOS
     final eventAsync = ref.watch(currentEventProvider);
-    // Ya no usamos el rankingListProvider aquí
     final establishmentsAsync = ref.watch(establishmentsListProvider);
-    // Cargamos los productos para el carrusel aleatorio
     final productsAsync = ref.watch(productsListProvider);
+    final sponsorsAsync = ref.watch(sponsorsListProvider);
     
     final authState = ref.watch(authStateProvider);
     final user = authState.value;
+
+    // --- FUNCIÓN PARA RECARGAR TODO (Usada en Pull-to-Refresh y Botones Reintentar) ---
+    void reloadAll() {
+      ref.invalidate(currentEventProvider);
+      ref.invalidate(productsListProvider);
+      ref.invalidate(establishmentsListProvider);
+      ref.invalidate(sponsorsListProvider);
+    }
+    // -----------------------------------------------------------------------------------
+
     String? avatarUrl;
     if (user != null && user.userMetadata != null && user.userMetadata!.containsKey('avatar_url')) {
       avatarUrl = user.userMetadata!['avatar_url'];
@@ -72,9 +84,7 @@ class HomeScreen extends ConsumerWidget {
         color: themeColor,
         backgroundColor: Colors.white,
         onRefresh: () async {
-          ref.invalidate(currentEventProvider);
-          ref.invalidate(productsListProvider); // Recargamos productos
-          ref.invalidate(establishmentsListProvider);
+          reloadAll(); // Usamos la función centralizada
           await Future.delayed(const Duration(seconds: 1));
         },
         child: CustomScrollView(
@@ -199,14 +209,19 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
 
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 20),
 
-                    // --- 1. RECOMENDADOR INTELIGENTE (NUEVO) ---
+                    // --- Tarjeta de Navegación Táctica ---
+                    NextStopCard(eventId: eventId),
+
+                    const SizedBox(height: 20),
+
+                    // --- 1. RECOMENDADOR INTELIGENTE ---
                     SmartRecommendationCard(eventId: eventId),
 
                     const SizedBox(height: 30),
 
-                    // --- 2. CARRUSEL "DESCUBRE" (ALEATORIO) ---
+                    // --- 2. CARRUSEL "DESCUBRE" ---
                     const Row(
                       children: [
                         Icon(Icons.explore, color: Colors.blue),
@@ -219,20 +234,32 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     
-                    // LÓGICA DEL CARRUSEL ALEATORIO
                     productsAsync.when(
                       loading: () => const SizedBox(
                         height: 200, 
                         child: Center(child: CircularProgressIndicator())
                       ),
-                      error: (e,s) => const SizedBox(),
+                      
+                      // 🛡️ AQUÍ ESTABA EL CAMBIO PRINCIPAL:
+                      error: (err, stack) => Container(
+                        height: 150,
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: ErrorView(
+                          error: err, 
+                          isCompact: true, 
+                          onRetry: reloadAll, // Botón reactiva todo
+                        ),
+                      ),
+
                       data: (products) {
                         if (products.isEmpty) return const Text("No hay datos disponibles");
-                        
-                        // MEZCLA ALEATORIA (Shuffle)
-                        // Creamos una copia para no alterar el orden original
                         final randomProducts = List<ProductModel>.from(products)..shuffle();
-                        // Cogemos solo 10 para no saturar
                         final displayProducts = randomProducts.take(10).toList();
 
                         return SizedBox(
@@ -248,7 +275,6 @@ class HomeScreen extends ConsumerWidget {
                                 margin: const EdgeInsets.only(right: 12),
                                 child: GestureDetector(
                                   onTap: () async {
-                                     // Buscamos el establecimiento para navegar
                                      final establishments = establishmentsAsync.valueOrNull ?? [];
                                      try {
                                        final est = establishments.firstWhere((e) => e.id == product.establishmentId);
@@ -265,7 +291,6 @@ class HomeScreen extends ConsumerWidget {
                                             fit: StackFit.expand,
                                             children: [
                                               SmartImageContainer(imageUrl: product.imageUrl, borderRadius: 0),
-                                              // Precio
                                               Positioned(
                                                 bottom: 0, right: 0,
                                                 child: Container(
@@ -291,7 +316,6 @@ class HomeScreen extends ConsumerWidget {
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(fontWeight: FontWeight.bold),
                                       ),
-                                      // Intentamos buscar el nombre del bar si está cargado
                                       Builder(builder: (context) {
                                         final establishments = establishmentsAsync.valueOrNull ?? [];
                                         try {
@@ -311,7 +335,7 @@ class HomeScreen extends ConsumerWidget {
 
                     const SizedBox(height: 40),
 
-                    // PATROCINADORES
+                    // --- 3. PATROCINADORES DINÁMICOS ---
                     const Center(
                       child: Text(
                         "PATROCINADORES OFICIALES",
@@ -320,49 +344,78 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    GridView.builder(
-                      shrinkWrap: true, 
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 1.8, 
+                    sponsorsAsync.when(
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      
+                      // 🛡️ AQUÍ TAMBIÉN AÑADIMOS EL ERRORVIEW
+                      error: (err, _) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        child: ErrorView(
+                          error: err, 
+                          isCompact: true, 
+                          onRetry: reloadAll,
+                        ),
                       ),
-                      itemCount: AppData.sponsors.length,
-                      itemBuilder: (context, index) {
-                        final s = AppData.sponsors[index];
-                        final String? url = s['url'];
-                        final String imageUrl = s['logo']!;
-                        
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade200),
+
+                      data: (sponsors) {
+                        if (sponsors.isEmpty) return const SizedBox();
+
+                        return GridView.builder(
+                          shrinkWrap: true, 
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 1.8, 
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: url != null && url.isNotEmpty
-                                    ? () async {
-                                        final uri = Uri.parse(url);
-                                        if (await canLaunchUrl(uri)) {
-                                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                        }
-                                      }
-                                    : null,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Center(
-                                    child: Image.network(imageUrl, fit: BoxFit.contain), 
+                          itemCount: sponsors.length,
+                          itemBuilder: (context, index) {
+                            final sponsor = sponsors[index];
+                            
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: (sponsor.websiteUrl != null && sponsor.websiteUrl!.isNotEmpty)
+                                        ? () async {
+                                            final uri = Uri.parse(sponsor.websiteUrl!);
+                                            if (await canLaunchUrl(uri)) {
+                                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                            }
+                                          }
+                                        : null,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12.0),
+                                      child: Center(
+                                        child: Image.network(
+                                          sponsor.logoUrl, 
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(Icons.broken_image, color: Colors.grey, size: 20),
+                                                const SizedBox(height: 4),
+                                                Text(sponsor.name, style: const TextStyle(fontSize: 10, color: Colors.grey), textAlign: TextAlign.center),
+                                              ],
+                                            );
+                                          },
+                                        ), 
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         );
                       },
                     ),

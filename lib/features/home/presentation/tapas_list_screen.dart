@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
+import 'package:torre_del_mar_app/core/widgets/error_view.dart'; // <--- IMPORTAR
 
 class TapasListScreen extends ConsumerWidget {
   const TapasListScreen({super.key});
@@ -13,22 +14,41 @@ class TapasListScreen extends ConsumerWidget {
     final productsAsync = ref.watch(productsListProvider);
     final establishmentsAsync = ref.watch(establishmentsListProvider);
 
+    //Funcion auxiliar:
+    void reloadAll(){
+      ref.invalidate(currentEventProvider);
+      ref.invalidate(productsListProvider);
+      ref.invalidate(establishmentsListProvider);
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text("Galería de Productos")),
       body: RefreshIndicator(
         color: Colors.orange,
         onRefresh: () async {
-          // 🔥 FORZAMOS LA RECARGA DE DATOS
-          ref.invalidate(productsListProvider);
-          ref.invalidate(establishmentsListProvider);
+          //Utilizamos la funcion auxiliar reloadAll() aqui:
+          reloadAll();
+          //Sustituyendo estas lineas:
+          // --> ref.invalidate(productsListProvider);
+          // --> ref.invalidate(establishmentsListProvider);
           await Future.delayed(const Duration(milliseconds: 500));
         },
         child: productsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, stack) => Center(child: Text('Error: $err')),
+          
+          // ✅ CAMBIO AQUÍ: ErrorView en lugar de Text
+          error: (err, stack) => ErrorView(
+            error: err,
+            onRetry: () {
+              //Aqui tambien se utiliza la funcion auxiliar reloadAll():
+              reloadAll();
+              //Sustituyendo estas lineas:
+              //--> ref.invalidate(productsListProvider);
+              //--> ref.invalidate(establishmentsListProvider);
+            },
+          ),
+
           data: (tapas) {
-            // TRUCO: Si está vacío, usamos un ListView con scroll activado para que 
-            // el usuario pueda deslizar hacia abajo y recargar igualmente.
             if (tapas.isEmpty) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -40,7 +60,6 @@ class TapasListScreen extends ConsumerWidget {
             }
 
             return GridView.builder(
-              // 🔥 OBLIGATORIO: Permitir scroll siempre para que funcione el gesto
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
