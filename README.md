@@ -105,7 +105,7 @@ const supabaseKey = 'TU_KEY_SUPABASE';
 
 ## 🔮 Futuro del Proyecto
 
-El sistema está diseñado de forma **desacoplada**. Actualmente utiliza Supabase para una iteración rápida, pero la capa de datos (Repositorios) está preparada para migrar a una arquitectura basada en **WordPress + MySQL** mediante API REST si los requisitos del cliente lo exigen, sin necesidad de reescribir la interfaz de usuario.
+El sistema está diseñado de forma **desacoplada**. Actualmente utiliza Supabase para una iteración rápida.
 
 ---
 
