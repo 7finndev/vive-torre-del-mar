@@ -111,6 +111,11 @@ El sistema está diseñado de forma **desacoplada**. Actualmente utiliza Supabas
 
 **Desarrollado con ❤️ para Torre del Mar.**
 
-```
 
-```
+## 📱 Demo de la Aplicación
+
+Haz clic en la imagen para ver el recorrido completo de la App "Vive Torre del Mar":
+
+[![Ver Video Demo](https://img.youtube.com/vi/TU_ID_AQUI/maxresdefault.jpg)](https://youtu.be/ejg0LpLGWFc)
+
+> **Duración:** 4 min | **Incluye:** Flujo de usuario, Votaciones y Panel de Administración.
