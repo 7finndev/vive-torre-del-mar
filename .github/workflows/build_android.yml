@@ -22,7 +22,6 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          # flutter-version: '3.19.0' # Descomenta si necesitas una versión fija
 
       - name: Get Dependencies
         run: flutter pub get
@@ -32,9 +31,14 @@ jobs:
         run: |
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" > .env
           echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
-      # ----------------------------
+
+      # 👇👇👇 NUEVO PASO: CREAR EL JSON DE FIREBASE 👇👇👇
+      - name: Create Google Services JSON
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > android/app/google-services.json
+      # ----------------------------------------------------
+
       - name: Build APK (Debug)
-        # Usamos --debug para evitar configurar firmas digitales complejas por ahora
         run: flutter build apk --debug --split-per-abi
 
       - name: Upload APK Artifact
@@ -42,4 +46,3 @@ jobs:
         with:
           name: app-debug
           path: build/app/outputs/flutter-apk/app-armeabi-v7a-debug.apk
-          # Nota: flutter genera varios APKs, subimos el más común o usa 'app-debug.apk' si es universal
