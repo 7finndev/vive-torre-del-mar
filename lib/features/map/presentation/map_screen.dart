@@ -1,72 +1,184 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_map/flutter_map.dart'; // Asegúrate de tener este import si usas flutter_map
-import 'package:latlong2/latlong.dart'; // Y este para las coordenadas
+import 'package:flutter_map/flutter_map.dart'; 
+import 'package:latlong2/latlong.dart'; 
+import 'package:geolocator/geolocator.dart'; 
 
-// TUS IMPORTS EXACTOS
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
-// Si usas marcadores propios
-import 'package:torre_del_mar_app/core/widgets/error_view.dart'; // <--- EL WIDGET SALVAVIDAS
+import 'package:torre_del_mar_app/core/widgets/error_view.dart';
+import 'package:torre_del_mar_app/features/home/presentation/widgets/establishment_card.dart'; 
+import 'providers/navigation_provider.dart';
 
 class MapScreen extends ConsumerWidget {
   const MapScreen({super.key});
 
+  Future<LatLng?> _getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return null;
+      }
+      return await Geolocator.getCurrentPosition().then((p) => LatLng(p.latitude, p.longitude));
+    } catch (e) { return null; }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Escuchamos la lista de establecimientos
     final establishmentsAsync = ref.watch(establishmentsListProvider);
+    final navState = ref.watch(navigationProvider); // Escuchamos cambios
 
     return Scaffold(
       body: establishmentsAsync.when(
-        // A. CARGANDO
         loading: () => const Center(child: CircularProgressIndicator()),
-
-        // B. ERROR (AQUÍ EVITAMOS LA PANTALLA ROJA)
         error: (err, stack) => ErrorView(
           error: err,
           onRetry: () {
-            ref.invalidate(currentEventProvider);       //|--> Reinicia el Padre
-            ref.invalidate(establishmentsListProvider); //|--> Reinicia el Hijo
+            ref.invalidate(establishmentsListProvider);
           }
         ),
-
-        // C. DATOS LISTOS
         data: (establishments) {
-          if (establishments.isEmpty) {
-            return const Center(child: Text("No hay locales para mostrar en este evento."));
-          }
+          if (establishments.isEmpty) return const Center(child: Text("No hay locales."));
 
-          // Centramos el mapa en el primer local o en Torre del Mar por defecto
           final center = establishments.first.latitude != null 
               ? LatLng(establishments.first.latitude!, establishments.first.longitude!)
-              : const LatLng(36.74, -4.09); // Torre del Mar centro aprox
+              : const LatLng(36.74, -4.09);
 
-          return FlutterMap(
-            options: MapOptions(
-              initialCenter: center,
-              initialZoom: 15.0,
-            ),
+          return Stack(
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.torre_del_mar_app',
-                // IMPORTANTE: Manejo de errores de tiles si no hay red
-                errorTileCallback: (tile, error, stackTrace) {
-                   // Esto evita que el mapa se ponga gris/rojo feo, simplemente no carga el fondo
-                },
+              // 1. MAPA
+              FlutterMap(
+                options: MapOptions(
+                  initialCenter: center,
+                  initialZoom: 15.0,
+                  onTap: (_, __) => ref.read(navigationProvider.notifier).clearSelection(),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.torre_del_mar_app',
+                  ),
+                  
+                  // RUTA (Debajo de los pines)
+                  if (navState.routePoints.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: navState.routePoints,
+                          strokeWidth: 5.0,
+                          color: Colors.orange,
+                        ),
+                      ],
+                    ),
+
+                  // MARCADORES
+                  MarkerLayer(
+                    markers: establishments.map((e) {
+                      if (e.latitude == null || e.longitude == null) return null;
+                      
+                      final isSelected = navState.targetEstablishment?.id == e.id;
+
+                      return Marker(
+                        point: LatLng(e.latitude!, e.longitude!),
+                        width: isSelected ? 60 : 40, // Un poco más grande si seleccionado
+                        height: isSelected ? 60 : 40,
+                        child: GestureDetector(
+                          onTap: () async {
+                            // 1. Feedback táctil inmediato (opcional)
+                            // HapticFeedback.selectionClick(); 
+
+                            final userLoc = await _getCurrentLocation();
+                            if (userLoc != null) {
+                              // 2. Activamos la lógica
+                              ref.read(navigationProvider.notifier).selectEstablishment(e, userLoc);
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Activa el GPS para trazar la ruta."))
+                              );
+                            }
+                          },
+                          child: Icon(
+                            Icons.location_on, 
+                            color: isSelected ? Colors.orange : Colors.red, 
+                            size: isSelected ? 60 : 40,
+                            // Añadimos una sombra para que se vea mejor
+                            shadows: const [Shadow(blurRadius: 5, color: Colors.black45)],
+                          ),
+                        ),
+                      );
+                    }).whereType<Marker>().toList(),
+                  ),
+                  
+                  // USUARIO
+                  if (navState.userLocation != null)
+                    MarkerLayer(markers: [
+                      Marker(
+                        point: navState.userLocation!,
+                        width: 20, height: 20,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue, shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: const [BoxShadow(blurRadius: 5, color: Colors.black26)]
+                          ),
+                        ),
+                      )
+                    ]),
+                ],
               ),
-              MarkerLayer(
-                markers: establishments.map((e) {
-                  if (e.latitude == null || e.longitude == null) return null;
-                  return Marker(
-                    point: LatLng(e.latitude!, e.longitude!),
-                    width: 40,
-                    height: 40,
-                    child: const Icon(Icons.location_on, color: Colors.red, size: 40), 
-                    // O usa tu CustomMapMarker si lo tienes implementado en widgets
-                  );
-                }).whereType<Marker>().toList(), // Filtramos nulos
-              ),
+
+              // 2. INDICADOR DE CARGA (CHIP FLOTANTE) - ¡AQUÍ ESTÁ LA MEJORA!
+              if (navState.isLoadingRoute)
+                Positioned(
+                  top: 60, // Debajo de la barra de estado
+                  left: 0, 
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange),
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            "Calculando ruta...", 
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              // 3. TARJETA DEL ESTABLECIMIENTO (Bottom Sheet)
+              if (navState.targetEstablishment != null)
+                Positioned(
+                  bottom: 20, left: 20, right: 20,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (navState.isOfflineMode)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8)),
+                          child: const Text("Sin conexión: Ruta no disponible", style: TextStyle(color: Colors.white)),
+                        ),
+                      EstablishmentCard(establishment: navState.targetEstablishment!),
+                    ],
+                  ),
+                ),
             ],
           );
         },

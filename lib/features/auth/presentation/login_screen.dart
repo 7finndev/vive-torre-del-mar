@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io'; 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:torre_del_mar_app/main.dart'; 
@@ -42,19 +43,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  // --- LÓGICA DE ENVÍO (Mantenemos la corrección de URL) ---
+  // --- LÓGICA DE ENVÍO (Ahora leyendo del .env) ---
   Future<void> _sendMagicLink() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) return _showError("Por favor, escribe tu email");
 
     setState(() => _isLoading = true);
     try {
-      // OJO: Asegúrate de que esto coincide con tu AndroidManifest.xml
-      // En tu snippet pusiste 'vivetorredelmar', antes era 'torredelmar'.
-      // He puesto la de tu último código:
+      // LEER DEL .ENV
+      // Usamos '??' para tener un valor por defecto de seguridad por si falla la lectura
       String redirectUrl = kIsWeb 
-          ? 'https://vive_torre_del_mar.7finn.es' 
-          : 'io.supabase.vivetorredelmar://login-callback';
+          ? (dotenv.env['MAGIC_LINK_URL_WEB'] ?? 'https://vivetorredelmar.7finn.es')
+          : (dotenv.env['MAGIC_LINK_URL_ANDROID'] ?? 'es.sietefinn.appvivetorredelmar://login-callback');
 
       await Supabase.instance.client.auth.signInWithOtp(
         email: email,
@@ -209,7 +209,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: Text(
             _isAdminMode 
               ? "¿Eres usuario? Entrar con enlace mágico" 
-              : "¿Eres administrador? Entrar con contraseña",
+              : "¿Entrar con email y contraseña? (Registro solo vía 'Enlace Mágico')",
             style: TextStyle(color: Colors.grey[600]),
           ),
         ),

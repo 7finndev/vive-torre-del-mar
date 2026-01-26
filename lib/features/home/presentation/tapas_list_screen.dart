@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
-import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
-import 'package:torre_del_mar_app/core/widgets/error_view.dart'; // <--- IMPORTAR
+// import 'package:torre_del_mar_app/core/utils/smart_image_container.dart'; // Ya no lo usaremos aquí directamente para tener más control
+import 'package:torre_del_mar_app/core/widgets/error_view.dart';
 
 class TapasListScreen extends ConsumerWidget {
   const TapasListScreen({super.key});
@@ -14,7 +14,6 @@ class TapasListScreen extends ConsumerWidget {
     final productsAsync = ref.watch(productsListProvider);
     final establishmentsAsync = ref.watch(establishmentsListProvider);
 
-    //Funcion auxiliar:
     void reloadAll(){
       ref.invalidate(currentEventProvider);
       ref.invalidate(productsListProvider);
@@ -26,25 +25,16 @@ class TapasListScreen extends ConsumerWidget {
       body: RefreshIndicator(
         color: Colors.orange,
         onRefresh: () async {
-          //Utilizamos la funcion auxiliar reloadAll() aqui:
           reloadAll();
-          //Sustituyendo estas lineas:
-          // --> ref.invalidate(productsListProvider);
-          // --> ref.invalidate(establishmentsListProvider);
           await Future.delayed(const Duration(milliseconds: 500));
         },
         child: productsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           
-          // ✅ CAMBIO AQUÍ: ErrorView en lugar de Text
           error: (err, stack) => ErrorView(
             error: err,
             onRetry: () {
-              //Aqui tambien se utiliza la funcion auxiliar reloadAll():
               reloadAll();
-              //Sustituyendo estas lineas:
-              //--> ref.invalidate(productsListProvider);
-              //--> ref.invalidate(establishmentsListProvider);
             },
           ),
 
@@ -62,12 +52,19 @@ class TapasListScreen extends ConsumerWidget {
             return GridView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, 
-                childAspectRatio: 0.8, 
+              
+              // 1. SOLUCIÓN PAISAJE (RESPONSIVE)
+              // En lugar de "FixedCrossAxisCount" (siempre 2), usamos "MaxCrossAxisExtent".
+              // Esto dice: "Cada tarjeta debe medir como MÁXIMO 200px de ancho".
+              // - En vertical (pantalla ~380px): Caben 2 tarjetas.
+              // - En paisaje (pantalla ~800px): Caben 4 tarjetas (no se ven gigantes).
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 220, 
+                childAspectRatio: 0.75, // Un poco más altas para que quepa el texto
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
               ),
+              
               itemCount: tapas.length,
               itemBuilder: (context, index) {
                 final tapa = tapas[index];
@@ -93,14 +90,27 @@ class TapasListScreen extends ConsumerWidget {
                       ],
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      // 2. SOLUCIÓN ALINEACIÓN IZQUIERDA
+                      // Esto obliga a que los hijos (la imagen) ocupen todo el ancho disponible
+                      crossAxisAlignment: CrossAxisAlignment.stretch, 
                       children: [
                         Expanded(
                           child: ClipRRect(
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                            child: SmartImageContainer(
-                              imageUrl: tapa.imageUrl,
-                              borderRadius: 0, 
+                            child: Stack(
+                              fit: StackFit.expand, // Obliga a la imagen a llenar el hueco
+                              children: [
+                                // Fondo para rellenar (por si la imagen no encaja)
+                                Image.network(
+                                  tapa.imageUrl ?? "",
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (c,o,s) => Container(color: Colors.grey[200]),
+                                ),
+                                // (Opcional) Si quieres que se vean completas sin recortar,
+                                // puedes descomentar esto, pero en grids pequeños suele quedar mejor 'cover'.
+                                // Si prefieres verla entera centrada como en el detalle, cambia el fit de arriba
+                                // a BoxFit.cover y añade un Container negro semitransparente encima.
+                              ],
                             ),
                           ),
                         ),

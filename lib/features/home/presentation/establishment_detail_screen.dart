@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -491,31 +492,93 @@ class _EstablishmentDetailScreenState
                                     ),
                                   ),
 
-                                // Foto
-                                SizedBox(
-                                  height: 220,
-                                  width: double.infinity,
-                                  child: Stack(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: product.isWinner 
-                                            ? BorderRadius.zero 
-                                            : const BorderRadius.vertical(top: Radius.circular(14)),
-                                        child: SmartImageContainer(imageUrl: product.imageUrl, borderRadius: 0),
-                                      ),
-                                      if (!isAvailable)
-                                        Positioned.fill(
+                                // Foto (ASPECTO CINE + BORDES FUSIONADOS/DIFUMINADOS)
+                                ClipRRect(
+                                  borderRadius: product.isWinner
+                                      ? BorderRadius.zero
+                                      : const BorderRadius.vertical(top: Radius.circular(16)),
+                                  child: SizedBox(
+                                    height: 250,
+                                    width: double.infinity,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        // CAPA 1: FONDO (Difuminado base)
+                                        Image.network(
+                                          product.imageUrl ?? "",
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (c, o, s) => Container(color: Colors.grey[200]),
+                                        ),
+                                        // Filtro de desenfoque base
+                                        BackdropFilter(
+                                          filter: ui.ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
                                           child: Container(
-                                            color: Colors.black38,
-                                            child: const Center(
-                                              child: Text("AGOTADO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                                            // Hacemos el fondo un poco más oscuro para dar profundidad
+                                            color: Colors.black.withOpacity(0.4),
+                                          ),
+                                        ),
+
+                                        // CAPA 2: IMAGEN PRINCIPAL CON BORDES FUSIONADOS
+                                        Center(
+                                          child: Padding(
+                                            // Reducimos un poco el padding para que la imagen sea más grande
+                                            // y el efecto de fusión en los bordes se note más.
+                                            padding: const EdgeInsets.all(8.0),
+                                            // AQUÍ ESTÁ LA MAGIA: ShaderMask
+                                            child: ShaderMask(
+                                              shaderCallback: (Rect bounds) {
+                                                // Creamos un degradado radial (circular)
+                                                return const RadialGradient(
+                                                  center: Alignment.center,
+                                                  radius: 0.8, // Ajusta este valor: más pequeño = más viñeta/fusión
+                                                  colors: [
+                                                    Colors.black, // Centro: Totalmente visible (la imagen)
+                                                    Colors.transparent, // Bordes: Se desvanece a transparente
+                                                  ],
+                                                  // Controla dónde empieza y acaba el desvanecimiento
+                                                  // 0.6 significa que el 60% central es nítido, luego empieza a desvanecerse
+                                                  stops: [0.6, 1.0],
+                                                  tileMode: TileMode.clamp,
+                                                ).createShader(bounds);
+                                              },
+                                              // BlendMode.dstIn significa: "Muestra la imagen solo donde el gradiente NO es transparente"
+                                              blendMode: BlendMode.dstIn,
+                                              child: Hero(
+                                                tag: 'product_img_${product.id}',
+                                                child: Image.network(
+                                                  product.imageUrl ?? "",
+                                                  fit: BoxFit.contain,
+                                                  errorBuilder: (context, error, stackTrace) {
+                                                    return const Icon(Icons.restaurant, size: 50, color: Colors.white54);
+                                                  },
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                    ],
+
+                                        // CAPA 3: Overlay AGOTADO
+                                        if (!isAvailable)
+                                          Positioned.fill(
+                                            child: Container(
+                                              color: Colors.black54,
+                                              child: const Center(
+                                                child: Text(
+                                                  "AGOTADO",
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 18,
+                                                    letterSpacing: 1.5,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-
                                 // Info Tapa
                                 Padding(
                                   padding: const EdgeInsets.all(16.0),
