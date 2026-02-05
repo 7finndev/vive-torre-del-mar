@@ -1,8 +1,3 @@
-### 👨‍💼 Archivo 3: Manual del Administrador
-**Nombre del archivo:** `docs/03_Manual_Administrador.md`
-**Objetivo:** Explicar cómo usar las nuevas funciones que hemos creado (especialmente lo del PIN).
-
-```markdown
 # 03. Manual de Administración
 
 ## Acceso al Panel
@@ -28,9 +23,9 @@ En la ficha de cada establecimiento hay una sección llamada **"Seguridad (Anti-
 
 ## 3. Visualización de Métricas
 El Dashboard principal muestra:
-* Total de usuarios únicos (híbrido: registrados + anónimos).
-* Desglose por plataforma (iOS vs Android vs Web).
-* Top 5 Bares más visitados.
+* Resumen: Métricas Clave con total de escaneos QR, usuarios únicos (híbrido: registrados + anónimos), productos, socios. También muestra datos por Evento.
+* Tecnología: Desglose por plataforma (iOS vs Android vs Web) de utilización de los usuarios.
+* Oferta: Porcentajes de la Oferta (Tapas, Bebidas, Tienda).
 
 ## 4. Guía de Recursos Gráficos (Imágenes)
 
