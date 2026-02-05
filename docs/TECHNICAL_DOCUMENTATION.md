@@ -98,13 +98,15 @@ Las imágenes de noticias pasan por el proxy `wsrv.nl` para optimización y cabe
 Tras modificar Modelos o Providers:
 ```bash
 flutter pub run build_runner build --delete-conflicting-outputs
+```
 
 ### Compilación Web
 
 Script optimizado ./build_web.sh:
-Bash
+```Bash
 
 ./build_web.sh
+```
 
 (Realiza limpieza, build con renderer html/canvaskit y versionado de caché).
 
@@ -124,4 +126,4 @@ Tablas Clave:
 
     analytics_devices: Registro de dispositivos para métricas anónimas.
 
-    ***
+***

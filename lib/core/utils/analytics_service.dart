@@ -26,7 +26,7 @@ class AnalyticsService {
         // --- WEB ---
         os = 'web';
         final webInfo = await _deviceInfo.webBrowserInfo;
-        model = "${webInfo.browserName.name}"        ;
+        model = webInfo.browserName.name        ;
         osVersion = webInfo.platform ?? '';
         
       } else {
