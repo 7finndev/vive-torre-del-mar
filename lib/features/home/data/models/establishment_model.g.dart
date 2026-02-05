@@ -38,13 +38,14 @@ class EstablishmentModelAdapter extends TypeAdapter<EstablishmentModel> {
       facebook: fields[18] as String?,
       instagram: fields[19] as String?,
       products: (fields[20] as List?)?.cast<ProductModel>(),
+      waiterPin: fields[21] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, EstablishmentModel obj) {
     writer
-      ..writeByte(21)
+      ..writeByte(22)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -86,7 +87,9 @@ class EstablishmentModelAdapter extends TypeAdapter<EstablishmentModel> {
       ..writeByte(19)
       ..write(obj.instagram)
       ..writeByte(20)
-      ..write(obj.products);
+      ..write(obj.products)
+      ..writeByte(21)
+      ..write(obj.waiterPin);
   }
 
   @override
@@ -129,6 +132,7 @@ EstablishmentModel _$EstablishmentModelFromJson(Map<String, dynamic> json) =>
       products: (json['products'] as List<dynamic>?)
           ?.map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
           .toList(),
+      waiterPin: json['waiter_pin'] as String?,
     );
 
 Map<String, dynamic> _$EstablishmentModelToJson(EstablishmentModel instance) =>
@@ -153,4 +157,5 @@ Map<String, dynamic> _$EstablishmentModelToJson(EstablishmentModel instance) =>
       'social_tiktok': instance.socialTiktok,
       'facebook': instance.facebook,
       'instagram': instance.instagram,
+      'waiter_pin': instance.waiterPin,
     };

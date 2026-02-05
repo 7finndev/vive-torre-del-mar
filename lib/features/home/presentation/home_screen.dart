@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:torre_del_mar_app/core/widgets/web_container.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
@@ -12,7 +13,6 @@ import 'package:torre_del_mar_app/core/utils/event_type_helper.dart';
 // WIDGETS
 import 'package:torre_del_mar_app/features/home/presentation/widgets/smart_recommendation_card.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
-import 'package:torre_del_mar_app/features/home/presentation/widgets/next_stop_card.dart';
 
 // 🆕 IMPORTANTE: Importar el ErrorView
 import 'package:torre_del_mar_app/core/widgets/error_view.dart';
@@ -27,9 +27,18 @@ class HomeScreen extends ConsumerWidget {
     final establishmentsAsync = ref.watch(establishmentsListProvider);
     final productsAsync = ref.watch(productsListProvider);
     final sponsorsAsync = ref.watch(sponsorsListProvider);
-    
+
+    final profileAsync = ref.watch(userProfileProvider);    
     final authState = ref.watch(authStateProvider);
     final user = authState.value;
+
+    //.-Obtener el ancho de pantalla:
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    //.-Cálculo tamaño dinamico
+    final bool isDesktop = screenWidth > 900;
+    final double avatarRadius = isDesktop ? 40.0 : 32.0;
+    final double borderThickness = isDesktop ? 3.0 : 2.0;
 
     // --- FUNCIÓN PARA RECARGAR TODO (Usada en Pull-to-Refresh y Botones Reintentar) ---
     void reloadAll() {
@@ -41,8 +50,23 @@ class HomeScreen extends ConsumerWidget {
     // -----------------------------------------------------------------------------------
 
     String? avatarUrl;
+    if(profileAsync.value != null){
+      avatarUrl = profileAsync.value!['avatar_url'];
+      //Para evitar caché:
+      if(avatarUrl != null && avatarUrl.isNotEmpty){
+        avatarUrl = "$avatarUrl?t=${DateTime.now().millisecondsSinceEpoch}";
+      }
+    } else if (authState.value != null){
+      avatarUrl = authState.value?.userMetadata?['avatar_url'];
+    }
+    /*
     if (user != null && user.userMetadata != null && user.userMetadata!.containsKey('avatar_url')) {
       avatarUrl = user.userMetadata!['avatar_url'];
+    }
+    */
+    ImageProvider? imageProvider;
+    if(avatarUrl != null && avatarUrl.isNotEmpty) {
+      imageProvider = NetworkImage(avatarUrl);
     }
 
     // VARIABLES POR DEFECTO
@@ -78,7 +102,9 @@ class HomeScreen extends ConsumerWidget {
 
     final appearance = EventTypeHelper.getAppearance(eventType);
 
-    return Scaffold(
+    return WebContainer(
+      backgroundColor: Colors.grey[200],
+      child: Scaffold(
       backgroundColor: Colors.grey[50],
       body: RefreshIndicator(
         color: themeColor,
@@ -94,6 +120,9 @@ class HomeScreen extends ConsumerWidget {
               pinned: true,
               expandedHeight: 280.0,
               backgroundColor: themeColor,
+              // Altura de la barra en PC un poco mayor para que quepa el avatar grande
+              toolbarHeight: isDesktop ? 90 : kToolbarHeight, 
+              
               leading: IconButton(
                  icon: Container(
                    padding: const EdgeInsets.all(8),
@@ -102,24 +131,45 @@ class HomeScreen extends ConsumerWidget {
                  ),
                  onPressed: () => context.go('/'),
               ),
+              
               actions: [
-                 GestureDetector(
-                   onTap: () => context.push('/profile', extra: eventId),
-                   child: Container(
-                     margin: const EdgeInsets.only(right: 16),
-                     padding: const EdgeInsets.all(2),
-                     decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                     child: CircleAvatar(
-                        radius: 18,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                        child: avatarUrl == null
-                            ? Icon(Icons.person, color: Colors.grey[600], size: 20)
-                            : null,
+                 // 1. Center: Evita que se pegue arriba
+                 Center(
+                   child: GestureDetector(
+                     onTap: () => context.push('/profile', extra: eventId),
+                     child: Container(
+                       margin: const EdgeInsets.only(right: 16), 
+                       // 2. Padding dinámico: Borde blanco un poco más grueso en PC
+                       padding: EdgeInsets.all(borderThickness), 
+                       decoration: const BoxDecoration(
+                         color: Colors.white, 
+                         shape: BoxShape.circle,
+                         boxShadow: [
+                           BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
+                         ]
+                       ),
+                       child: CircleAvatar(
+                          // 3. Radius Dinámico: USAMOS LA VARIABLE, NO EL 60 FIJO
+                          radius: avatarRadius, 
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: imageProvider, //avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                          //Manejamos el error SOLO si hay imagen:
+                          onBackgroundImageError: imageProvider != null
+                            ? (exception, stackTrace) {
+                               print("Error cargandio avatar: $exception");
+                              }
+                            : null
+                          ,
+                          //Si no hay imagen o falla, mostramos icono
+                          child: imageProvider == null //avatarUrl == null
+                              ? Icon(Icons.person, color: Colors.grey[600], size: avatarRadius * 1.2)
+                              : null,
+                       ),
                      ),
                    ),
                  ),
               ],
+              // ------------------------------------
               flexibleSpace: FlexibleSpaceBar(
                 centerTitle: true,
                 title: Padding(
@@ -212,7 +262,7 @@ class HomeScreen extends ConsumerWidget {
                     const SizedBox(height: 20),
 
                     // --- Tarjeta de Navegación Táctica ---
-                    NextStopCard(eventId: eventId),
+                    //NextStopCard(eventId: eventId),
 
                     const SizedBox(height: 20),
 
@@ -345,80 +395,55 @@ class HomeScreen extends ConsumerWidget {
                     const SizedBox(height: 16),
 
                     sponsorsAsync.when(
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      
-                      // 🛡️ AQUÍ TAMBIÉN AÑADIMOS EL ERRORVIEW
-                      error: (err, _) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: ErrorView(
-                          error: err, 
-                          isCompact: true, 
-                          onRetry: reloadAll,
-                        ),
-                      ),
+                        loading: () => const Center(child: CircularProgressIndicator()),
+                        error: (err, _) => ErrorView(error: err, isCompact: true, onRetry: reloadAll),
+                        data: (sponsors) {
+                          if (sponsors.isEmpty) return const SizedBox();
 
-                      data: (sponsors) {
-                        if (sponsors.isEmpty) return const SizedBox();
-
-                        return GridView.builder(
-                          shrinkWrap: true, 
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 1.8, 
-                          ),
-                          itemCount: sponsors.length,
-                          itemBuilder: (context, index) {
-                            final sponsor = sponsors[index];
-                            
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade200),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: (sponsor.websiteUrl != null && sponsor.websiteUrl!.isNotEmpty)
-                                        ? () async {
-                                            final uri = Uri.parse(sponsor.websiteUrl!);
-                                            if (await canLaunchUrl(uri)) {
-                                              await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                            }
-                                          }
-                                        : null,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12.0),
-                                      child: Center(
-                                        child: Image.network(
-                                          sponsor.logoUrl, 
-                                          fit: BoxFit.contain,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                const Icon(Icons.broken_image, color: Colors.grey, size: 20),
-                                                const SizedBox(height: 4),
-                                                Text(sponsor.name, style: const TextStyle(fontSize: 10, color: Colors.grey), textAlign: TextAlign.center),
-                                              ],
-                                            );
-                                          },
-                                        ), 
-                                      ),
+                          return GridView.builder(
+                            shrinkWrap: true, 
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                              // 🔥 ESTO ES LO IMPORTANTE: 180 hace que sean pequeños (tipo tarjeta de visita)
+                              // Si en PC hay espacio, pondrá 5 o 6 en fila.
+                              // Si es móvil, pondrá 2 en fila.
+                              maxCrossAxisExtent: 180, 
+                              mainAxisExtent: 100, // Altura fija controlada
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                            ),
+                            itemCount: sponsors.length,
+                            itemBuilder: (context, index) {
+                              final sponsor = sponsors[index];
+                              return Tooltip(
+                                message: sponsor.name,
+                                child: InkWell(
+                                  onTap: (sponsor.websiteUrl?.isNotEmpty ?? false) 
+                                      ? () => launchUrl(Uri.parse(sponsor.websiteUrl!), mode: LaunchMode.externalApplication) 
+                                      : null,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.grey.shade200),
+                                      boxShadow: [
+                                        BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)
+                                      ]
+                                    ),
+                                    child: Image.network(
+                                      sponsor.logoUrl, 
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_,__,___) => const Icon(Icons.broken_image, color: Colors.grey),
                                     ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                              );
+                            },
+                          );
+                        },
+                      ),
                     
                     const SizedBox(height: 60),
                   ],
@@ -428,6 +453,7 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

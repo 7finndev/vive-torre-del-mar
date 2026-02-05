@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:torre_del_mar_app/core/utils/smart_image_container.dart';
 import 'package:torre_del_mar_app/features/map/presentation/providers/navigation_provider.dart';
-// Importa el archivo nuevo que creamos arriba (ajusta la ruta si lo pusiste en otro lado)
 import 'package:torre_del_mar_app/features/home/presentation/providers/nearest_bar_provider.dart'; 
 
 class NextStopCard extends ConsumerWidget {
@@ -12,37 +11,29 @@ class NextStopCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // ESCUCHAMOS EL PROVIDER (La magia reactiva)
     final nearestAsync = ref.watch(nearestBarProvider(eventId));
 
     return nearestAsync.when(
-      // 1. CARGANDO (Silencioso o Skeleton)
       loading: () => const SizedBox.shrink(), 
-      
-      // 2. ERROR (Si explota el GPS o la Red, no mostramos nada y evitamos crash)
       error: (err, stack) => const SizedBox.shrink(), 
-      
-      // 3. DATOS LISTOS
       data: (result) {
-        // Caso A: No hay GPS o no hay bares pendientes
         if (result == null || result.bar == null) {
-          // Opcional: Mostrar tarjeta de "Ruta Completada" o nada
-          // Si no hay GPS, mejor no mostramos nada para no molestar
            return const SizedBox.shrink(); 
         }
 
         final bar = result.bar!;
         final distance = result.distance;
 
-        // Caso B: Tenemos bar cercano
         return Card(
           elevation: 4,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: () {
-              // Configurar navegación
-              ref.read(navigationProvider.notifier).setTarget(bar);
+              // 🔥 CORRECCIÓN AQUÍ:
+              // Usamos 'selectOnly' para marcar el bar en el mapa.
+              // Al navegar a /map, el mapa verá que hay un 'target' y mostrará la tarjeta automáticamente.
+              ref.read(navigationProvider.notifier).selectOnly(bar);
               context.go('/event/$eventId/map'); 
             },
             child: Padding(

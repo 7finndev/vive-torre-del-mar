@@ -1,5 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; 
+
+// Importa tu modelo de Evento
+import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 
 part 'dashboard_repository.g.dart';
 
@@ -8,20 +12,30 @@ class DashboardStats {
   final int totalUsers;
   final int activeProducts;
   final int activeEstablishments;
-  
-  // --- NUEVOS CAMPOS PARA EL GRÁFICO ---
-  final int countTapas;
-  final int countDrinks;
-  final int countShopping;
+  final Map<String, int> languages; 
+
+  // --- CAMPOS PARA EL GRÁFICO ---
+  final int countProducts; // Tapas/Gastro
+  final int countDrinks;   // Cócteles
+  final int countShopping; // Tiendas
+
+  // --- CAMPOS TECNOLOGÍAS ---
+  final int deviceAndroid;
+  final int deviceIOS; // Nota: Mantengo el nombre que tenías para no romper la UI
+  final int deviceWeb;
 
   DashboardStats({
     required this.totalScans,
     required this.totalUsers,
     required this.activeProducts,
     required this.activeEstablishments,
-    required this.countTapas,
+    required this.countProducts,
     required this.countDrinks,
     required this.countShopping,
+    required this.deviceAndroid,
+    required this.deviceIOS,
+    required this.deviceWeb,
+    required this.languages,
   });
 }
 
@@ -30,57 +44,65 @@ class DashboardRepository {
   DashboardRepository(this._client);
 
   Future<DashboardStats> getStats({int? eventId}) async {
-    // 1. USUARIOS (Global, usando la política de seguridad Admin que creamos)
+    // 1. USUARIOS (Global)
+    // Nota: Profiles suele ser una tabla protegida, asegúrate de tener política SELECT
     final usersCount = await _client.from('profiles').count(CountOption.exact);
 
-    // 2. Preparar query de Productos (y obtenemo el tipo de evento)
-    var query = _client.from('event_products').select('id, events(type)');//('id, events!inner(type)'); 
-    
+    // 2. PRODUCTOS Y CATEGORÍAS
+    var query = _client.from('event_products').select('id, events(type)');
+
     if (eventId != null) {
       query = query.eq('event_id', eventId);
     }
 
-    // Ejecutamos la consulta
     final List<dynamic> productsData = await query;
 
-    // 3. Contar manualmente los tipos (Dart es muy rápido para listas < 10.000 items)
-    int tapas = 0;
+    int products = 0;
     int drinks = 0;
     int shopping = 0;
 
     for (var item in productsData) {
-//      final type = (item['type'] as String? ?? '').toLowerCase();
-//      if (type == 'gastronomic' || type == 'tapas') tapas++;
-//      else if (type == 'drinks' || type == 'coctel' || type == 'cóctel') drinks++;
-//      else if (type == 'shopping' || type == 'tienda') shopping++;
-      //Recorremos el JSON:
       final eventData = item['events'] as Map<String, dynamic>?;
-      if(eventData != null) {
+      if (eventData != null) {
         final type = (eventData['type'] as String? ?? '').toLowerCase();
 
-        // Clasificacmos según el tipo de Evento
-        if(type == 'gastronomic' || type == 'tapas') {
-          tapas++;
-        } else if (type == 'drinks' || type == 'coctel') drinks++;
-        else if (type == 'shopping') shopping++;
+        if (type.contains('tapa') || type.contains('gastro')) {
+          products++;
+        } else if (type.contains('drink') ||
+            type.contains('coctel') ||
+            type.contains('cóctel')) {
+          drinks++;
+        } else if (type.contains('shop') ||
+            type.contains('tienda') ||
+            type.contains('comercio')) {
+          shopping++;
+        } else {
+           // Por defecto si no cuadra nada
+           products++;
+        }
       }
     }
-    
-    // Total calculado
-    final totalProducts = tapas + drinks + shopping;
 
-    // 4. Contar Bares (Lógica según filtro)
+    final totalProducts = products + drinks + shopping;
+
+    // 3. ESTABLECIMIENTOS (SOCIOS)
     int establishmentsCount = 0;
     if (eventId != null) {
-      establishmentsCount = await _client
-          .from('event_establishments_view') // Asegúrate de tener esta vista o la relación configurada
-          .count(CountOption.exact)
-          .eq('event_id', eventId);
+      try {
+        establishmentsCount = await _client
+            .from('event_establishments')
+            .count(CountOption.exact)
+            .eq('event_id', eventId);
+      } catch (_) {
+        establishmentsCount = 0;
+      }
     } else {
-      establishmentsCount = await _client.from('establishments').count(CountOption.exact);
+      establishmentsCount = await _client
+          .from('establishments')
+          .count(CountOption.exact);
     }
 
-    // 5. Contar Escaneos
+    // 4. ESCANEOS / VISITAS
     int scansCount = 0;
     try {
       var scansQuery = _client.from('passport_entries').count(CountOption.exact);
@@ -90,19 +112,68 @@ class DashboardRepository {
       scansCount = 0;
     }
 
+    // 5. CONSULTA DE DISPOSITIVOS (OPTIMIZADA 🔥)
+    // Traemos OS y Locale de una sola vez para ahorrar peticiones
+    Map<String, int> langMap = {};
+    int android = 0, ios = 0, web = 0;
+
+    try {
+      final List<dynamic> analyticsData = await _client
+          .from('analytics_devices')
+          .select('os, locale'); // Seleccionamos solo lo necesario
+
+      for (var item in analyticsData) {
+        // A. Contar OS (Normalizando a minúsculas)
+        final String os = (item['os'] ?? '').toString().toLowerCase().trim();
+
+        if (os == 'android') {
+          android++;
+        } else if (os == 'ios') {
+          ios++;
+        } else if (os == 'web') {
+          web++;
+        }
+
+        // B. Contar Idiomas
+        final String code = item['locale'] ?? 'unknown';
+        if (code != 'unknown' && code.isNotEmpty) {
+           langMap[code] = (langMap[code] ?? 0) + 1;
+        }
+      }
+    } catch (e) {
+      print("⚠️ Error leyendo Analytics: $e");
+    }
+
     return DashboardStats(
       totalScans: scansCount,
       totalUsers: usersCount,
       activeProducts: totalProducts,
       activeEstablishments: establishmentsCount,
-      countTapas: tapas,        // <--- DATOS REALES
-      countDrinks: drinks,      // <--- DATOS REALES
-      countShopping: shopping,  // <--- DATOS REALES
+      countProducts: products,
+      countDrinks: drinks,
+      countShopping: shopping,
+      deviceAndroid: android,
+      deviceIOS: ios, // Mapeamos la variable local 'ios' al campo 'deviceIOS'
+      deviceWeb: web,
+      languages: langMap,
     );
   }
 }
 
+// --- PROVIDERS ---
+
 @riverpod
 DashboardRepository dashboardRepository(DashboardRepositoryRef ref) {
   return DashboardRepository(Supabase.instance.client);
+}
+
+final dashboardSelectedEventProvider = StateProvider<EventModel?>(
+  (ref) => null,
+);
+
+@riverpod
+Future<DashboardStats> dashboardStats(DashboardStatsRef ref) async {
+  final repo = ref.watch(dashboardRepositoryProvider);
+  final selectedEvent = ref.watch(dashboardSelectedEventProvider);
+  return repo.getStats(eventId: selectedEvent?.id);
 }

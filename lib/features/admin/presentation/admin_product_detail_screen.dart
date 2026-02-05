@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:torre_del_mar_app/features/admin/presentation/providers/admin_products_providers.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
+// 🔥 1. IMPORTAMOS EL MODELO DE ESTABLECIMIENTO
+import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 
-// Si tu productsListProvider está en home_providers, importa esto:
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
+// 🔥 2. IMPORTA DONDE TENGAS EL PROVIDER DE 'TODOS LOS ESTABLECIMIENTOS'
+// Si lo dejaste en admin_products_screen.dart, importa ese archivo.
+// Si lo moviste a admin_products_providers.dart, importa ese.
 
 class AdminProductDetailScreen extends ConsumerWidget {
   final ProductModel product;
@@ -13,19 +18,17 @@ class AdminProductDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. TRUCO DE MAGIA: 🎩
-    // En lugar de usar 'this.product' directamente, buscamos la versión más nueva
-    // en la lista global de productos.
+    // Lista de productos (para refrescar datos del producto actual)
     final productsAsync = ref.watch(productsListProvider);
+    
+    // 🔥 3. TRAEMOS LA LISTA DE BARES (Para buscar el dueño del producto)
+    final establishmentsAsync = ref.watch(adminAllEstablishmentsProvider);
 
-    // Intentamos encontrar este producto en la lista actualizada.
-    // Si la lista está cargando o falla, usamos el 'product' viejo temporalmente.
     final currentProduct = productsAsync.valueOrNull?.firstWhere(
       (p) => p.id == product.id,
-      orElse: () => product, // Si no lo encuentra, usa el viejo
+      orElse: () => product,
     ) ?? product;
 
-    // Truco anti-caché para la imagen
     final String? imageUrl = currentProduct.imageUrl != null 
         ? "${currentProduct.imageUrl!}?t=${DateTime.now().millisecondsSinceEpoch}"
         : null;
@@ -37,25 +40,16 @@ class AdminProductDetailScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () async {
-              // 2. NAVEGACIÓN CON ESPERA
-              // Usamos 'push' para esperar a que el formulario se cierre
-              // Nota: pushNamed necesita que definas el nombre en el router, si no usas nombres, usa push
               final bool? result = await context.pushNamed<bool>(
                 'product_form',
                 extra: {
                   'eventId': currentProduct.eventId,
-                  'productToEdit': currentProduct, // Pasamos el actual
+                  'productToEdit': currentProduct,
                 },
               );
 
-              // 3. SI SE GUARDÓ CORRECTAMENTE...
               if (result == true) {
-                // FORZAMOS LA RECARGA DE LA LISTA
-                // Al invalidar la lista, el 'ref.watch' de arriba se disparará de nuevo
-                // y 'currentProduct' se actualizará solo.
                 ref.invalidate(productsListProvider);
-                
-                // Opcional: Mostrar mensaje
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Vista actualizada")),
@@ -70,7 +64,7 @@ class AdminProductDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. IMAGEN
+            // IMAGEN
             SizedBox(
               height: 300,
               width: double.infinity,
@@ -87,7 +81,7 @@ class AdminProductDetailScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 2. CABECERA
+                  // CABECERA
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -105,7 +99,7 @@ class AdminProductDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 10),
                   
-                  // Estado
+                  // ESTADO
                   Row(
                     children: [
                       Container(
@@ -139,7 +133,57 @@ class AdminProductDetailScreen extends ConsumerWidget {
                   const Divider(),
                   const SizedBox(height: 20),
 
-                  // 3. DESCRIPCIÓN
+                  // 🔥 4. NUEVA SECCIÓN: ESTABLECIMIENTO ASOCIADO 🔥
+                  const Text("Ofrecido por:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blueGrey)),
+                  const SizedBox(height: 10),
+
+                  establishmentsAsync.when(
+                    loading: () => const LinearProgressIndicator(),
+                    error: (e, _) => Text("No se pudo cargar el local: $e"),
+                    data: (establishments) {
+                      // Buscamos el local en la lista usando el ID que tiene el producto
+                      final establishment = establishments.firstWhere(
+                        (e) => e.id == currentProduct.establishmentId,
+                        // Fallback por si no lo encontramos
+                        orElse: () => EstablishmentModel(id: 0, name: "Local Desconocido", isActive: false, qrUuid: ''),
+                      );
+
+                      if (establishment.id == 0) return const Text("Local no encontrado.");
+
+                      return Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(12),
+                          leading: CircleAvatar(
+                            radius: 25,
+                            backgroundColor: Colors.blue.shade50,
+                            backgroundImage: establishment.coverImage != null 
+                              ? NetworkImage(establishment.coverImage!) 
+                              : null,
+                            child: establishment.coverImage == null 
+                              ? const Icon(Icons.store, color: Colors.blue) 
+                              : null,
+                          ),
+                          title: Text(
+                            establishment.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          subtitle: Text("Ir a la ficha del socio >", style: TextStyle(color: Colors.blue[700])),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                          onTap: () {
+                            // 🔥 NAVEGAMOS AL DETALLE DEL ESTABLECIMIENTO
+                            // Usamos la ruta que ya tienes configurada para socios
+                            context.push('/admin/socios/detail', extra: establishment);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  // DESCRIPCIÓN
                   const Text("Descripción", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   const SizedBox(height: 10),
                   Text(
@@ -149,7 +193,7 @@ class AdminProductDetailScreen extends ConsumerWidget {
                     style: const TextStyle(fontSize: 16, height: 1.5, color: Colors.black87),
                   ),
 
-                  // Ingredientes si los hay
+                  // INGREDIENTES
                   if (currentProduct.ingredients != null && currentProduct.ingredients!.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     const Text("Ingredientes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
@@ -159,7 +203,7 @@ class AdminProductDetailScreen extends ConsumerWidget {
 
                   const SizedBox(height: 30),
                   
-                  // 4. DATOS TÉCNICOS
+                  // DATOS TÉCNICOS
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(15),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:torre_del_mar_app/core/widgets/responsive_center.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,7 +28,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ResponsiveCenter(
+      child: Scaffold(
       backgroundColor: Colors.white, // El mismo color que la nativa
       body: Center(
         child: Padding(
@@ -47,6 +49,7 @@ class _SplashScreenState extends State<SplashScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

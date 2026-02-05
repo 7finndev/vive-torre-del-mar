@@ -6,22 +6,8 @@ part of 'home_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$localDbHash() => r'02a8a5c599aca41b8bdaab46eab1e4f93296dbfa';
-
-/// See also [localDb].
-@ProviderFor(localDb)
-final localDbProvider = AutoDisposeProvider<LocalDbService>.internal(
-  localDb,
-  name: r'localDbProvider',
-  debugGetCreateSourceHash:
-      const bool.fromEnvironment('dart.vm.product') ? null : _$localDbHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
-
-typedef LocalDbRef = AutoDisposeProviderRef<LocalDbService>;
 String _$establishmentRepositoryHash() =>
-    r'b300c9b23d34e300876ed05bd6fba8732135ae21';
+    r'ef0d2967c92654b216e11209347898cbf6f922ff';
 
 /// See also [establishmentRepository].
 @ProviderFor(establishmentRepository)
@@ -39,7 +25,7 @@ final establishmentRepositoryProvider =
 typedef EstablishmentRepositoryRef
     = AutoDisposeProviderRef<EstablishmentRepository>;
 String _$passportRepositoryHash() =>
-    r'ff2638d27de373fc1e6b6357536e621433255691';
+    r'a7426b0affe15e556734cad5e394a055b6854c22';
 
 /// See also [passportRepository].
 @ProviderFor(passportRepository)
@@ -106,7 +92,7 @@ final productsListProvider =
 );
 
 typedef ProductsListRef = AutoDisposeFutureProviderRef<List<ProductModel>>;
-String _$currentEventHash() => r'818f9c011bc5f3a0a1860d1b25676b2b901f8df6';
+String _$currentEventHash() => r'9267c39454e6a84f846f2a19132fd19133ec292e';
 
 /// See also [currentEvent].
 @ProviderFor(currentEvent)
@@ -120,7 +106,7 @@ final currentEventProvider = AutoDisposeFutureProvider<EventModel>.internal(
 );
 
 typedef CurrentEventRef = AutoDisposeFutureProviderRef<EventModel>;
-String _$adminEventsListHash() => r'eb8ae8d5ccb28a93c9648c32ab2c23f5712c1911';
+String _$adminEventsListHash() => r'93755cb6d121cbcc13c2a64a873039fe2e0930d0';
 
 /// See also [adminEventsList].
 @ProviderFor(adminEventsList)
@@ -302,5 +288,21 @@ class _EventDetailsProviderElement
   @override
   int get eventId => (origin as EventDetailsProvider).eventId;
 }
+
+String _$sponsorsListHash() => r'f85c9601192243dc9819a0d1d6ea50a83480c8ff';
+
+/// See also [sponsorsList].
+@ProviderFor(sponsorsList)
+final sponsorsListProvider =
+    AutoDisposeFutureProvider<List<SponsorModel>>.internal(
+  sponsorsList,
+  name: r'sponsorsListProvider',
+  debugGetCreateSourceHash:
+      const bool.fromEnvironment('dart.vm.product') ? null : _$sponsorsListHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef SponsorsListRef = AutoDisposeFutureProviderRef<List<SponsorModel>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

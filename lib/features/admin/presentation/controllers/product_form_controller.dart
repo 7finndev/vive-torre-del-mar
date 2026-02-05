@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_item_model.dart';
@@ -84,8 +83,7 @@ class ProductFormController extends _$ProductFormController {
     required double price,
     required int establishmentId,
     required int eventId,
-    File? newImage,
-    String? currentImageUrl,
+    required String? finalImageUrl,
     String? allergens, // "Gluten, Huevo"
     String? ingredients,
   }) async {
@@ -93,6 +91,8 @@ class ProductFormController extends _$ProductFormController {
 
     try {
       final repository = ref.read(productRepositoryProvider);
+      
+      /*
       String? finalImageUrl = currentImageUrl;
 
       // 1. Subir imagen si hay una nueva
@@ -101,7 +101,8 @@ class ProductFormController extends _$ProductFormController {
         final imageBytes = await newImage.readAsBytes();
         finalImageUrl = await repository.uploadProductImage(fileName, imageBytes);
       }
-
+      */
+      
       // 2. Preparar listas (Alergenos)
       List<String>? allergensList;
       if (allergens != null && allergens.isNotEmpty) {

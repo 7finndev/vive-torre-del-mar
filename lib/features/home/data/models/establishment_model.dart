@@ -36,6 +36,9 @@ class EstablishmentModel extends HiveObject {
   @JsonKey(includeToJson: false)                                                                                                                                                                      
   final List<ProductModel>? products;
   
+  @HiveField(21)
+  @JsonKey(name: 'waiter_pin')
+  final String? waiterPin;
 
   EstablishmentModel({
     required this.id,
@@ -60,6 +63,7 @@ class EstablishmentModel extends HiveObject {
     this.facebook,
     this.instagram,
     this.products,
+    this.waiterPin,
   });
 
   factory EstablishmentModel.fromJson(Map<String, dynamic> json) => 

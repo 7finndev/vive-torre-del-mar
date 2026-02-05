@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
+import 'package:torre_del_mar_app/core/widgets/responsive_center.dart';
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart'; 
 import 'package:torre_del_mar_app/features/scan/data/models/passport_entry_model.dart';
 
@@ -106,7 +107,8 @@ class _StampCard extends StatelessWidget {
       dateStr = stamp.scannedAt.toString().substring(0, 16); 
     }
 
-    return Card(
+    return ResponsiveCenter(
+      child: Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -171,6 +173,7 @@ class _StampCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
+import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/product_repository.dart';
 
 
@@ -24,4 +26,10 @@ final adminProductsByEventProvider = FutureProvider.autoDispose<List<ProductMode
   // Nota: Asegúrate de haber añadido el método 'getProductsByEvent' 
   // en tu ProductRepository como vimos en el paso anterior.
   return repo.getProductsByEvent(selectedEvent.id);
+});
+
+// Este provider trae TODOS los bares, sin importar eventos activos/inactivos
+final adminAllEstablishmentsProvider = FutureProvider<List<EstablishmentModel>>((ref) async {
+  final repo = ref.watch(establishmentRepositoryProvider);
+  return repo.getAllEstablishments();
 });

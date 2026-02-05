@@ -59,7 +59,7 @@ class TapasListScreen extends ConsumerWidget {
               // - En vertical (pantalla ~380px): Caben 2 tarjetas.
               // - En paisaje (pantalla ~800px): Caben 4 tarjetas (no se ven gigantes).
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220, 
+                maxCrossAxisExtent: 300,//220, 
                 childAspectRatio: 0.75, // Un poco más altas para que quepa el texto
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,

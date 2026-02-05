@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'dart:io'; // Para Platform
-import 'package:flutter/foundation.dart'; // Para kIsWeb
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // UTILS
-import 'package:torre_del_mar_app/core/router/go_router_refresh_stream.dart'; // <--- NUEVO IMPORT
-import 'package:torre_del_mar_app/features/admin/presentation/admin_establishment_detail_screen.dart';
-import 'package:torre_del_mar_app/features/admin/presentation/admin_product_detail_screen.dart';
+import 'package:torre_del_mar_app/core/router/go_router_refresh_stream.dart';
+import 'package:torre_del_mar_app/features/admin/presentation/admin_user_screen.dart';
+import 'package:torre_del_mar_app/features/admin/presentation/screens/admin_sponsors_screen.dart';
 
 // PROVIDERS
-import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart'; // <--- IMPORTANTE
+import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:torre_del_mar_app/features/auth/presentation/register_screen.dart';
 
 // MODELOS
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 
-// PANTALLAS MÓVIL
+// PANTALLAS MÓVIL (PÚBLICAS)
 import 'package:torre_del_mar_app/features/hub/presentation/hub_screen.dart';
 import 'package:torre_del_mar_app/features/home/presentation/event_shell_screen.dart';
 import 'package:torre_del_mar_app/features/home/presentation/home_screen.dart';
@@ -32,7 +31,7 @@ import 'package:torre_del_mar_app/features/auth/presentation/profile_screen.dart
 import 'package:torre_del_mar_app/features/auth/presentation/login_screen.dart';
 import 'package:torre_del_mar_app/features/home/presentation/splash_screen.dart';
 
-// PANTALLAS ADMIN
+// PANTALLAS ADMIN (PRIVADAS)
 import 'package:torre_del_mar_app/features/admin/presentation/admin_shell_screen.dart';
 import 'package:torre_del_mar_app/features/admin/presentation/establishment_form_screen.dart';
 import 'package:torre_del_mar_app/features/admin/presentation/admin_establishments_screen.dart';
@@ -40,9 +39,8 @@ import 'package:torre_del_mar_app/features/admin/presentation/admin_events_scree
 import 'package:torre_del_mar_app/features/admin/presentation/admin_dashboard_screen.dart';
 import 'package:torre_del_mar_app/features/admin/presentation/admin_products_screen.dart';
 import 'package:torre_del_mar_app/features/admin/presentation/product_form_screen.dart';
-
-// WIDGETS COMPARTIDOS
-// Asegúrate de que este import es correcto
+import 'package:torre_del_mar_app/features/admin/presentation/admin_establishment_detail_screen.dart';
+import 'package:torre_del_mar_app/features/admin/presentation/admin_product_detail_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -50,65 +48,31 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 @riverpod
 GoRouter appRouter(AppRouterRef ref) {
-  // 1. Escuchamos el estado de autenticación
   final authState = ref.watch(authStateProvider);
-  
-  // 2. Obtenemos el STREAM (para usarlo en 'refreshListenable')
-  // Nota el '.stream' al final
   final authStream = ref.watch(authStateProvider.stream);
-
-  // Función auxiliar para saber si es entorno Desktop/Web
-  bool isDesktopOrWeb() {
-    if (kIsWeb) return true;
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) return true;
-    return false;
-  }
-
-  // Lógica de ruta inicial (manteniendo tu lógica)
-  String getInitialRoute() {
-    if (isDesktopOrWeb()) return '/admin';
-    return '/splash';
-  }
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: getInitialRoute(),
-
-    // 2. REFRESH: Esto hace que el router se reconstruya si cambia el usuario
+    // 1. ESTRATEGIA: Siempre entramos al Hub público
+    initialLocation: '/', 
     refreshListenable: GoRouterRefreshStream(authStream),
 
-    // 3. SEGURIDAD (REDIRECT ASÍNCRONO)
-    // Convertimos la función en 'async' para poder consultar la BD antes de movernos
+    // 2. EL PORTERO SIMPLIFICADO
     redirect: (context, state) async {
       final isLoggedIn = authState.valueOrNull != null;
-      final isLoggingIn = state.uri.path == '/login';
       final isGoingToAdmin = state.uri.path.startsWith('/admin');
+      final isGoingToLogin = state.uri.path == '/login';
 
-      // -----------------------------------------------------------
-      // REGLA 1: SI NO ESTÁ LOGUEADO
-      // -----------------------------------------------------------
-      if (isGoingToAdmin && !isLoggedIn) {
-        return '/login';
-      }
+      // CASO A: INTENTA ENTRAR A ZONA ADMIN
+      if (isGoingToAdmin) {
+        // Si no está logueado -> Al login (con aviso de que es para admin)
+        if (!isLoggedIn) {
+          return '/login?admin=true';
+        }
 
-      // -----------------------------------------------------------
-      // REGLA 2: YA LOGUEADO -> REDIRIGIR
-      // -----------------------------------------------------------
-      if (isLoggedIn && isLoggingIn) {
-        return isDesktopOrWeb() ? '/admin' : '/';
-      }
-
-      // -----------------------------------------------------------
-      // REGLA 3: EL "PORTERO" (VERIFICACIÓN DE ROL ANTI-FLASH)
-      // -----------------------------------------------------------
-      // Si intenta entrar al admin y está logueado, verificamos su rol
-      // ANTES de dejarle pasar. Esto evita el pantallazo del dashboard.
-      if (isLoggedIn && isGoingToAdmin) {
-        // 1. Obtenemos el usuario
+        // Si está logueado, verificamos ROL en base de datos
         final user = Supabase.instance.client.auth.currentUser;
-
         if (user != null) {
-          // 2. Consultamos su rol en la base de datos (Rápido)
           final profile = await Supabase.instance.client
               .from('profiles')
               .select('role')
@@ -116,36 +80,53 @@ GoRouter appRouter(AppRouterRef ref) {
               .maybeSingle();
 
           final role = profile?['role'] ?? 'user';
-
-          // 3. Si NO es admin, le prohibimos el paso aquí mismo.
+          
+          // Si NO es admin, lo echamos al Hub público
           if (role != 'admin') {
-            // Opcional: Hacemos logout aquí para limpiar, aunque LoginScreen también lo hará.
-            // await Supabase.instance.client.auth.signOut();
-            return '/login';
+            return '/'; 
           }
         }
       }
 
-      return null; // Todo correcto, pase usted.
+      // CASO B: ESTÁ EN LOGIN PERO YA TIENE SESIÓN
+      if (isLoggedIn && isGoingToLogin) {
+         // Si viene de ?admin=true intentaremos mandarlo al admin, 
+         // si no, al hub. Pero por simplicidad, mandamos al Hub y que él navegue.
+         return '/';
+      }
+
+      // CASO C: TODO LO DEMÁS (Rutas públicas)
+      return null; // Pase usted
     },
 
     routes: [
       // --- LOGIN ---
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/login', 
+        builder: (context, state) => const LoginScreen()
+      ),
+
+      GoRoute(
+        path: '/register',
+        builder: (context, state) => const RegisterScreen(),
+      ),
 
       // =====================================================================
-      // 🌍 ZONA PÚBLICA (MÓVIL)
+      // 🌍 ZONA PÚBLICA (ACCESIBLE PARA TODOS)
       // =====================================================================
       
-      // Ruta de Splash Screen:
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
       ),
 
-      GoRoute(path: '/', builder: (context, state) => const HubScreen()),
+      // PÁGINA PRINCIPAL
+      GoRoute(
+        path: '/', 
+        builder: (context, state) => const HubScreen()
+      ),
 
-      // MODO EVENTO (Con Barra Inferior)
+      // MODO EVENTO (Sub-rutas públicas)
       GoRoute(
         path: '/event/:id',
         redirect: (context, state) {
@@ -163,115 +144,65 @@ GoRouter appRouter(AppRouterRef ref) {
               );
             },
             branches: [
-              // 0. Dashboard
-              StatefulShellBranch(
-                routes: [
-                  GoRoute(
-                    path: 'dashboard',
-                    builder: (context, state) => const HomeScreen(),
-                  ),
-                ],
-              ),
-              // 1. Mapa
-              StatefulShellBranch(
-                routes: [
-                  GoRoute(
-                    path: 'map',
-                    builder: (context, state) => const MapScreen(),
-                  ),
-                ],
-              ),
-              // 2. Locales
-              StatefulShellBranch(
-                routes: [
-                  GoRoute(
-                    path: 'locales',
-                    //builder: (context, state) => const EstablishmentsListScreen(),
-                    builder: (context, state) {
-                      // 1. Buscamos el parámetro 'eventId' en la URL
-                      // (Asumiendo que tu ruta padre es algo como path: '/event/:eventId')
+              StatefulShellBranch(routes: [
+                  GoRoute(path: 'dashboard', builder: (_, __) => const HomeScreen()),
+              ]),
+              StatefulShellBranch(routes: [
+                  GoRoute(path: 'map', builder: (_, __) => const MapScreen()),
+              ]),
+              StatefulShellBranch(routes: [
+                  GoRoute(path: 'locales', builder: (context, state) {
                       final idString = state.pathParameters['eventId'];
-
-                      // 2. Lo convertimos de Texto a Número (con seguridad)
-                      // Si falla o es nulo, usamos 1 por defecto para que no explote.
                       final eventId = int.tryParse(idString ?? '') ?? 1;
-
-                      // 3. Pasamos el ID a la pantalla
                       return EstablishmentsListScreen(eventId: eventId);
-                    },
-                  ),
-                ],
-              ),
-              // 3. Tapas/Cócteles
-              StatefulShellBranch(
-                routes: [
-                  GoRoute(
-                    path: 'tapas',
-                    builder: (context, state) => const TapasListScreen(),
-                  ),
-                ],
-              ),
-              // 4. Ranking
-              StatefulShellBranch(
-                routes: [
-                  GoRoute(
-                    path: 'ranking',
-                    builder: (context, state) => const RankingScreen(),
-                  ),
-                ],
-              ),
-              // 5. Pasaporte
-              StatefulShellBranch(
-                routes: [
-                  GoRoute(
-                    path: 'passport',
-                    builder: (context, state) => const PassportScreen(),
-                  ),
-                ],
-              ),
+                  }),
+              ]),
+              StatefulShellBranch(routes: [
+                  GoRoute(path: 'tapas', builder: (_, __) => const TapasListScreen()),
+              ]),
+              StatefulShellBranch(routes: [
+                  GoRoute(path: 'ranking', builder: (_, __) => const RankingScreen()),
+              ]),
+              StatefulShellBranch(routes: [
+                  GoRoute(path: 'passport', builder: (_, __) => const PassportScreen()),
+              ]),
             ],
           ),
         ],
       ),
 
-      // PANTALLAS SUELTAS
-      // Ruta para profile (perfil o usuarios)
+      // PANTALLAS SUELTAS PÚBLICAS
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,
         path: '/profile',
         builder: (context, state) {
-          final user = authState.valueOrNull;
-          if (user == null) return const LoginScreen();
-
-          // --- CAMBIO AQUÍ ---
-          // Intentamos leer el 'eventId' si viene en el objeto 'extra'
-          // Esto permite que el perfil sepa si venimos de un evento o del Hub
+          // Si no está logueado, al perfil le mandamos al login
+          // (Es el único sitio público que requiere login básico)
+          if (authState.valueOrNull == null) return const LoginScreen();
           final int? eventId = state.extra as int?;
-
           return ProfileScreen(eventId: eventId);
         },
       ),
-      // Nueva ruta para vincular pasaporte físico
       GoRoute(
-        parentNavigatorKey: _rootNavigatorKey,
-        path: '/scan_physical_passport',
-        builder: (context, state) {
-          // TODO: Aquí iría tu pantalla real de escaneo (ej: ScanPhysicalPassportScreen)
-          // De momento ponemos un placeholder funcional
-          return Scaffold(
-            appBar: AppBar(title: const Text("Vincular Pasaporte")),
-            body: const Center(
-              child: Text("Funcionalidad de escáner en construcción 🚧"),
-            ),
-          );
-        },
-      ),
-      GoRoute(
-        parentNavigatorKey: _rootNavigatorKey,
         path: '/detail',
         builder: (context, state) {
-          final bar = state.extra as EstablishmentModel;
-          return EstablishmentDetailScreen(establishment: bar);
+          // 🛡️ BLINDAJE ANTI-CRASH WEB
+          final extra = state.extra;
+          EstablishmentModel establishment;
+
+          if (extra is EstablishmentModel) {
+            // Caso normal: Viene la clase
+            establishment = extra;
+          } else if (extra is Map<String, dynamic>) {
+            // Caso Web/Restart: Viene un JSON, lo convertimos
+            establishment = EstablishmentModel.fromJson(extra);
+          } else {
+            // Caso de emergencia (evita pantalla roja)
+            // Crea un objeto dummy o redirige a error
+            return const Scaffold(body: Center(child: Text("Error al cargar datos del local")));
+          }
+
+          return EstablishmentDetailScreen(establishment: establishment);
         },
       ),
       GoRoute(
@@ -284,100 +215,56 @@ GoRouter appRouter(AppRouterRef ref) {
       ),
 
       // =====================================================================
-      // 🛠️ ZONA PRIVADA (ADMINISTRACIÓN)
+      // 🛠️ ZONA PRIVADA (ADMINISTRACIÓN) - Protegida por el 'redirect'
       // =====================================================================
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             AdminShellScreen(navigationShell: navigationShell),
         branches: [
-          // 0. Dashboard
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/admin',
-                builder: (_, __) => const AdminDashboardScreen(),
-              ),
-            ],
-          ),
-          // 1. Socios (Lista de Bares)
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/admin/socios',
-                builder: (_, __) => const AdminEstablishmentsScreen(),
-                routes: [
-                  // Sub-ruta 1: Nuevo
-                  GoRoute(
-                    path: 'nuevo',
-                    builder: (_, __) => const EstablishmentFormScreen(),
-                  ),
-
-                  // Sub-ruta 2: Detalle
-                  // La URL final será: /admin/socios/detail
-                  GoRoute(
-                    path: 'detail',
-                    builder: (context, state) {
+          StatefulShellBranch(routes: [
+              GoRoute(path: '/admin', builder: (_, __) => const AdminDashboardScreen(), routes: [
+                GoRoute(
+                  path: 'sponsors', // --> /admin/sponsors
+                  builder: (context, state){
+                    return const AdminSponsorsScreen();
+                  },
+                ),
+              ]
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+              GoRoute(path: '/admin/socios', builder: (_, __) => const AdminEstablishmentsScreen(), routes: [
+                  GoRoute(path: 'nuevo', builder: (_, __) => const EstablishmentFormScreen()),
+                  GoRoute(path: 'detail', builder: (context, state) {
                       final establishment = state.extra as EstablishmentModel;
-                      return AdminEstablishmentDetailScreen(
-                        establishment: establishment,
-                      );
-                    },
-                  ),
-
-                  // Sub-ruta 3: Editar
-                  GoRoute(
-                    path: 'edit', //La url sera '/admin/socios/edit'
-                    builder: (context, state) {
+                      return AdminEstablishmentDetailScreen(establishment: establishment);
+                  }),
+                  GoRoute(path: 'edit', builder: (context, state) {
                       final establishment = state.extra as EstablishmentModel;
-                      //Reutilizamos el formulario pero pasándole el objeto para editar
-                      return EstablishmentFormScreen(
-                        establishmentToEdit: establishment,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-          // 2. Eventos
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/admin/events',
-                builder: (_, __) => const AdminEventsScreen(),
-              ),
-            ],
-          ),
-          // 3. Participaciones
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/admin/participaciones',
-                builder: (context, state) => const AdminProductsScreen(),
-                routes: [
-                  GoRoute(
-                    path: 'nuevo',
-                    name: 'product_form',
-                    builder: (context, state) {
+                      return EstablishmentFormScreen(establishmentToEdit: establishment);
+                  }),
+              ]),
+          ]),
+          StatefulShellBranch(routes: [
+              GoRoute(path: '/admin/events', builder: (_, __) => const AdminEventsScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+              GoRoute(path: '/admin/products', builder: (_, __) => const AdminProductsScreen(), routes: [
+                  GoRoute(path: 'nuevo', name: 'product_form', builder: (context, state) {
                       final args = state.extra as Map<String, dynamic>?;
                       final eventId = args?['eventId'] as int? ?? 0;
                       final product = args?['productToEdit'] as ProductModel?;
-
-                      return ProductFormScreen(
-                        initialEventId: eventId,
-                        productToEdit: product,
-                      );
-                    },
-                  ),
-                  GoRoute(
-                    path: 'detail', // URL: /admin/participaciones/detail
-                    builder: (context, state) {
+                      return ProductFormScreen(initialEventId: eventId, productToEdit: product);
+                  }),
+                  GoRoute(path: 'detail', builder: (context, state) {
                       final product = state.extra as ProductModel;
                       return AdminProductDetailScreen(product: product);
-                    },
-                  ),
-                ],
-              ),
+                  }),
+              ]),
+          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/admin/users', builder: (_, __) => const AdminUsersScreen()),
             ],
           ),
         ],

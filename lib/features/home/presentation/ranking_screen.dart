@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:torre_del_mar_app/core/widgets/web_container.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart'; // Necesario para el modelo
 import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
 
@@ -85,7 +86,9 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WebContainer(
+      backgroundColor: Colors.grey[100], //Fondo gris para la web.
+      child: Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text("🏆 Ranking"),
@@ -260,6 +263,7 @@ class _RankingScreenState extends ConsumerState<RankingScreen> {
                     },
                   ),
       ),
+    ),
     );
   }
 }

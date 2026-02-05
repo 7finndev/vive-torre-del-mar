@@ -1,18 +1,23 @@
-// Mi codigo:
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/date_symbol_data_local.dart'; // <--- IMPORTANTE
+import 'package:intl/date_symbol_data_local.dart';
+
+// --- IMPORTACIONES FIREBASE ---
+//import 'package:firebase_core/firebase_core.dart';
+//import 'package:firebase_messaging/firebase_messaging.dart';
+// -----------------------------
 
 import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
 import 'package:torre_del_mar_app/core/router/app_router.dart';
+import 'package:torre_del_mar_app/core/utils/analytics_service.dart';
 import 'package:window_manager/window_manager.dart'; 
 
-// Variable global
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
@@ -21,51 +26,109 @@ void main() async {
   // 1. Cargar variables de entorno
   await dotenv.load(fileName: '.env');
 
-  // --- NUEVO: Inicializar formato de fechas en Español ---
+  // 2. Inicializar formato de fechas
   await initializeDateFormatting('es'); 
   
-  // ------------------------------------------------------
-  // ------------------------------------------------------------
-  // BLOQUE DE CONFIGURACIÓN DE VENTANA (SOLO ESCRITORIO)
-  // ------------------------------------------------------------
-  // Verificamos:
-  // 1. Que NO sea Web (kIsWeb es false)
-  // 2. Que sea Linux, Windows o MacOS
-  if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
-    
-    await windowManager.ensureInitialized();
+  // 3. Inicializar Base de Datos Local (Hive)
+  final localDb = LocalDbService();
+  await localDb.init();
 
+  // 4. Inicializar Supabase 
+  // Es vital iniciarlo antes que Firebase para poder guardar el token si ya hay sesión.
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL'] ?? '', 
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+  );
+
+  // ------------------------------------------------------------
+  // BLOQUE FIREBASE + SINCRONIZACIÓN CON SUPABASE 🔥☁️
+  // ------------------------------------------------------------
+  /*
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    try {
+      await Firebase.initializeApp();
+      print("✅ FIREBASE INICIALIZADO");
+
+      final messaging = FirebaseMessaging.instance;
+      
+      // Pedir permisos
+      await messaging.requestPermission(alert: true, badge: true, sound: true);
+
+      // Obtener Token
+      final token = await messaging.getToken();
+      
+      if (token != null) {
+        print("📬 TOKEN FCM: $token");
+        
+        // --- AQUÍ OCURRE LA MAGIA ---
+        // Guardamos el token en Supabase si el usuario ya está logueado
+        _saveTokenToSupabase(token);
+
+        // También escuchamos si el token cambia (refresh) para actualizarlo
+        messaging.onTokenRefresh.listen((newToken) {
+          _saveTokenToSupabase(newToken);
+        });
+        
+        // Y escuchamos si el usuario hace Login ahora mismo para guardar el token
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+          if (data.session != null) {
+            _saveTokenToSupabase(token);
+          }
+        });
+      }
+
+    } catch (e) {
+      print("❌ ERROR FIREBASE: $e");
+    }
+  }
+  */
+  // ------------------------------------------------------------
+
+  // BLOQUE DE CONFIGURACIÓN DE VENTANA (SOLO ESCRITORIO)
+  if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+    await windowManager.ensureInitialized();
     WindowOptions windowOptions = const WindowOptions(
       size: Size(1280, 800),
-      minimumSize: Size(900, 700), // Esto en un móvil sería gigante
+      minimumSize: Size(900, 700),
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.normal,
     );
-    
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
     });
   }
-  // ------------------------------------------------------------
-  // 2. Inicializar Base de Datos Local (Hive)
-  final localDb = LocalDbService();
-  await localDb.init();
 
-  // 3. Inicializar Supabase
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '', //'TU_SUPABASE_URL_AQUI', 
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '', //'TU_SUPABASE_ANON_KEY_AQUI',
-  );
-
+  //.-Iniciamos el 'Tracking' de los dispositivos:
+  print("📊 Iniciando registro de dispositivo...");
+  await AnalyticsService.trackDeviceStart(localDb);
+  
   runApp(
-    // ProviderScope es necesario para Riverpod
     const ProviderScope(
       child: MyApp(),
     ),
   );
+}
+
+// --- FUNCIÓN AUXILIAR PARA GUARDAR EL TOKEN ---
+Future<void> _saveTokenToSupabase(String token) async {
+  final userId = Supabase.instance.client.auth.currentUser?.id;
+  
+  // Si no hay usuario logueado, no podemos guardar nada en 'profiles' todavía.
+  if (userId == null) return;
+
+  try {
+    await Supabase.instance.client
+        .from('profiles')
+        .update({'fcm_token': token})
+        .eq('id', userId);
+    
+    print("💾 Token FCM guardado en el perfil del usuario: $userId");
+  } catch (e) {
+    print("⚠️ Error guardando token en Supabase: $e");
+  }
 }
 
 class MyApp extends ConsumerWidget {
@@ -73,151 +136,27 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Escuchamos el router (que configuraremos en breve)
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'Torre del Mar Experience',
+      title: 'Vive Torre del Mar',
       debugShowCheckedModeBanner: false,
-      
-      // Configuración de Rutas
       routerConfig: router,
-      
-      // Asignar la llave aqui
       scaffoldMessengerKey: rootScaffoldMessengerKey,
-      
-      // Tema base (luego lo haremos dinámico)
+      scrollBehavior: AppScrollBehavior(),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
         useMaterial3: true,
       ),
-      //theme: AppTheme.getLight(),
     );
   }
 }
 
-
-/*  Codigo que se genera al crear el proyecto:
-import 'package:flutter/material.dart';
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
+class AppScrollBehavior extends MaterialScrollBehavior {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse, // <--- ESTO ACTIVA EL ARRASTRE CON RATÓN
+    PointerDeviceKind.trackpad,
+  };
 }
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
-*/

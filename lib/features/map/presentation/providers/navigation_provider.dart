@@ -3,12 +3,12 @@ import 'package:latlong2/latlong.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/map/data/datasources/osm_service.dart';
 
-// ESTADO
+// ESTADO (Sin cambios)
 class NavigationState {
   final EstablishmentModel? targetEstablishment;
   final LatLng? userLocation;
   final List<LatLng> routePoints; 
-  final bool isLoadingRoute;      // <--- LA CLAVE
+  final bool isLoadingRoute;      
   final bool isOfflineMode;       
   final bool shouldRecalculate; 
 
@@ -45,39 +45,44 @@ class NavigationNotifier extends StateNotifier<NavigationState> {
 
   NavigationNotifier() : super(NavigationState());
 
-  void setTarget(EstablishmentModel establishment) {
+  // --- 1. MÉTODO NUEVO: SOLO SELECCIONAR (Instantáneo) ---
+  // Muestra la tarjeta del bar sin pedir GPS ni calcular nada.
+  void selectOnly(EstablishmentModel establishment) {
     state = state.copyWith(
       targetEstablishment: establishment,
-      routePoints: [], 
+      routePoints: [], // Limpiamos la ruta anterior para no confundir
+      isLoadingRoute: false,
       isOfflineMode: false,
-      shouldRecalculate: true,
+      // No tocamos userLocation (si ya la teníamos, se queda; si no, null)
     );
   }
 
-  // --- MÉTODO OPTIMIZADO ---
-  Future<void> selectEstablishment(EstablishmentModel establishment, LatLng userLocation) async {
-    // 1. INMEDIATO: Mostrar local, limpiar ruta vieja y ACTIVAR CARGA
+  // --- 2. MÉTODO NUEVO: CALCULAR RUTA (Bajo demanda) ---
+  // Se llama cuando el usuario pulsa el botón "CÓMO LLEGAR"
+  Future<void> calculateRouteToTarget(LatLng userLocation) async {
+    final target = state.targetEstablishment;
+    
+    // Si no hay local seleccionado o le faltan coordenadas, no hacemos nada
+    if (target == null || target.latitude == null || target.longitude == null) return;
+
+    // Activamos spinner y guardamos la ubicación actual del usuario
     state = state.copyWith(
-      targetEstablishment: establishment,
       userLocation: userLocation,
-      routePoints: [], 
-      isLoadingRoute: true, // <--- ¡AQUÍ ENCENDEMOS EL SPINNER!
+      isLoadingRoute: true, 
       isOfflineMode: false,
-      shouldRecalculate: false, 
     );
 
     try {
-      final targetLoc = LatLng(establishment.latitude!, establishment.longitude!);
+      final targetLoc = LatLng(target.latitude!, target.longitude!);
       
-      // 2. ASÍNCRONO: Esperar a la API (mientras el usuario ve el spinner)
+      // Llamada a la API de rutas (OSM/OSRM)
       final points = await _osrmService.getWalkingRoute(userLocation, targetLoc);
       
       if (mounted) {
-        // 3. RESULTADO: Pintar ruta y APAGAR spinner
         state = state.copyWith(
           routePoints: points,
-          isLoadingRoute: false, // <--- APAGAMOS
-          isOfflineMode: points.isEmpty, // Si viene vacío, asumimos fallo de red
+          isLoadingRoute: false, // Apagamos spinner
+          isOfflineMode: points.isEmpty, // Si viene vacío, asumimos error de red
         );
       }
     } catch (e) {
@@ -99,6 +104,10 @@ class NavigationNotifier extends StateNotifier<NavigationState> {
   }
 }
 
-final navigationProvider = StateNotifierProvider<NavigationNotifier, NavigationState>((ref) {
+// (MEJORADO) Limpia el proveedor cuando no se usa:
+final navigationProvider = StateNotifierProvider.autoDispose<NavigationNotifier, NavigationState>((ref) {
   return NavigationNotifier();
 });
+//final navigationProvider = StateNotifierProvider<NavigationNotifier, NavigationState>((ref) {
+//  return NavigationNotifier();
+//});

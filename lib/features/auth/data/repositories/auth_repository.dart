@@ -1,11 +1,9 @@
-import 'dart:io'; // Necesario para manejar el archivo de la foto
+import 'dart:typed_data'; // NECESARIO para Uint8List
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../datasources/auth_service.dart';
 
 class AuthRepository {
   final AuthService _authService;
-  
-  // Acceso directo al cliente para operaciones de Storage y Update
   final SupabaseClient _client = Supabase.instance.client;
 
   AuthRepository(this._authService);
@@ -34,44 +32,45 @@ class AuthRepository {
   
   Stream<AuthState> get authStateChanges => _authService.authStateChanges;
 
-  // --- ACTUALIZAR PERFIL ---
+  // --- ACTUALIZAR PERFIL (VERSIÓN BYTES) ---
   Future<void> updateProfile({
     required String userId,
     String? name,
     String? phone,
-    File? imageFile,
+    Uint8List? imageBytes, // <--- CAMBIO: Recibimos bytes, no File
   }) async {
     final updates = <String, dynamic>{};
     
     // 1. Preparamos los datos de texto
     if (name != null) {
       updates['full_name'] = name; 
-      updates['name'] = name; // Guardamos en ambos por compatibilidad
+      updates['name'] = name; 
     }
     if (phone != null) {
       updates['phone'] = phone;
     }
 
-    // 2. Si hay imagen nueva, la subimos a Storage
-    if (imageFile != null) {
-      // Usamos siempre el nombre 'avatar' para sobreescribir la anterior y ahorrar espacio
-      // Ojo: Hay que aseuúrarse de que el bucket 'avatars' exista en Supabase
-      final fileExt = imageFile.path.split('.').last;
-      final fileName = '$userId/avatar.$fileExt'; 
+    // 2. Si hay imagen nueva (BYTES), la subimos
+    if (imageBytes != null) {
+      // Como usamos ImageHelper, sabemos que siempre es JPG
+      final fileName = '$userId/avatar.jpg'; 
 
       try {
-        // Subimos la imagen (upsert: true permite sobreescribir)
-        await _client.storage.from('avatars').upload(
+        // CAMBIO: Usamos uploadBinary en lugar de upload
+        // Esto funciona en Web y Móvil por igual
+        await _client.storage.from('avatars').uploadBinary(
           fileName,
-          imageFile,
-          fileOptions: const FileOptions(upsert: true),
+          imageBytes,
+          fileOptions: const FileOptions(
+            upsert: true,
+            contentType: 'image/jpeg', // Importante para que el navegador sepa qué es
+          ),
         );
 
-        // Obtenemos la URL pública para guardarla en el perfil
-        // NOTA: A veces Supabase tarda un segundo en refrescar la caché de la imagen pública
+        // Obtenemos la URL pública
         final imageUrl = _client.storage.from('avatars').getPublicUrl(fileName);
         
-        // Añadimos un timestamp al final para evitar problemas de caché en la app
+        // Añadimos timestamp para romper caché
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         updates['avatar_url'] = "$imageUrl?t=$timestamp";
         
@@ -80,7 +79,7 @@ class AuthRepository {
       }
     }
 
-    // 3. Actualizamos el usuario en Supabase Auth (Metadatos)
+    // 3. Actualizamos el usuario en Supabase Auth
     if (updates.isNotEmpty) {
       final UserResponse res = await _client.auth.updateUser(
         UserAttributes(

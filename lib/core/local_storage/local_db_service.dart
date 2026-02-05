@@ -10,6 +10,7 @@ import 'package:torre_del_mar_app/features/scan/data/models/passport_entry_model
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:uuid/uuid.dart';
 
 part 'local_db_service.g.dart';
 
@@ -21,10 +22,13 @@ class LocalDbService {
   static const String syncedStampsBoxName = 'synced_stamps_box';
   static const String productsBoxName = 'products_box';
 
-  // --- NUEVAS CAJAS PARA CACHÉ (JSON CRUDO) ---
+  // --- NUEVAS CAJAS PARA CACHÉ ---
   static const String eventsCacheBoxName = 'cache_events_raw';
   static const String sponsorsCacheBoxName = 'cache_sponsors_raw';
   
+  // --- CAJA PARA DEVICES ---
+  static const String appSettingsBoxName = 'app_settings_box';
+
   Future<void> init() async {
     // --- LÓGICA DE INICIALIZACIÓN HÍBRIDA ---
     if (kIsWeb) {
@@ -54,6 +58,7 @@ class LocalDbService {
     await _openBoxSafely(pendingVotesBoxName);
     await _openBoxSafely(syncedStampsBoxName);
     await _openBoxSafely(productsBoxName);
+    await _openBoxSafely(appSettingsBoxName);
 
     // --- ABRIR CAJAS DE CACHÉ ---
     await _openBoxSafely(eventsCacheBoxName);
@@ -89,10 +94,28 @@ class LocalDbService {
   Box get syncedStampsBox => Hive.box(syncedStampsBoxName);
   Box get productsBox => Hive.box(productsBoxName);
 
+  Box get _appSettingsBox => Hive.box(appSettingsBoxName);
+
   // --- GETTERS Y MÉTODOS DE CACHÉ ---
   Box get _eventsCacheBox => Hive.box(eventsCacheBoxName);
   Box get _sponsorsCacheBox => Hive.box(sponsorsCacheBoxName);
 
+  // MÉTODO OBTENER/CREAR ID DISPOSITIVO:
+  String getDeviceUuid() {
+    //.-Buscamos si ya tiene identificador
+    String? deviceId = _appSettingsBox.get('device_uuid');
+
+    //.-Se lo creamos si no tiene:
+    if(deviceId == null){
+      deviceId = const Uuid().v4();
+      _appSettingsBox.put('device_uuid', deviceId);
+      print("🆕 Asignado nuevo Device ID: $deviceId");
+    } else {
+      print("🆔 Device ID recuperado: $deviceId");
+    }
+    return deviceId;
+  }
+  
   // 1. CACHÉ DE EVENTOS
   Future<void> cacheEvents(List<Map<String, dynamic>> eventsJson) async {
     // Guardamos la lista completa bajo una sola clave 'all'

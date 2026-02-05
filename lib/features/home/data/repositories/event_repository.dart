@@ -11,7 +11,7 @@ class EventRepository {
   EventRepository(this._client);
 
   // ==========================================================
-  // 📸 NUEVO MÉTODO: SUBIR IMAGEN DE EVENTO
+  //  MÉTODO: SUBIR IMAGEN DE EVENTO
   // ==========================================================
   Future<String> uploadEventImage(String fileName, Uint8List fileBytes) async {
     try {
@@ -82,6 +82,21 @@ class EventRepository {
   Future<void> deleteEvent(int id) async {
     await _client.from('events').delete().eq('id', id);
   }
+
+  // NUEVO: BORRAR IMAGEN ANTIGUA
+  Future<void> deleteEventImage(String imageUrl) async {
+    try {
+      // Extraemos el nombre del archivo de la URL
+      final uri = Uri.parse(imageUrl);
+      final fileName = uri.pathSegments.last; 
+      
+      await _client.storage.from('events').remove([fileName]);
+      print("🗑️ Imagen evento eliminada: $fileName");
+    } catch (e) {
+      print("⚠️ No se pudo borrar imagen antigua: $e");
+    }
+  }
+
 }
 
 @riverpod

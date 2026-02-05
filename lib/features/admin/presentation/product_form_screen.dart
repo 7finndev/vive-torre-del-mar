@@ -1,11 +1,17 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dropdown_search/dropdown_search.dart'; 
-import 'package:torre_del_mar_app/core/utils/image_picker_widget.dart';
-import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart';
+import 'package:dropdown_search/dropdown_search.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:torre_del_mar_app/core/utils/image_helper.dart'; 
+import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
+import 'package:torre_del_mar_app/features/home/data/repositories/product_repository.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/admin/presentation/controllers/product_form_controller.dart';
+import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart' hide establishmentRepositoryProvider;
+import 'package:uuid/uuid.dart';
 
 // Lista constante de alérgenos
 const List<String> _commonAllergens = [
@@ -33,6 +39,8 @@ class ProductFormScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
+  Uint8List? _newImageBytes;
+
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
@@ -218,6 +226,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   const SizedBox(height: 8),
 
                   if (_useImageUpload)
+                  /*
                     ImagePickerWidget(
                       bucketName: 'products',
                       initialUrl: _imageUrlController.text.isNotEmpty ? _imageUrlController.text : null,
@@ -225,6 +234,26 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         setState(() => _imageUrlController.text = url);
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Imagen lista")));
                       },
+                    )
+                  */
+                    Column(
+                      children: [
+                        Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10)),
+                          child: _newImageBytes != null
+                            ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(_newImageBytes!, fit: BoxFit.cover))
+                            : (_imageUrlController.text.isNotEmpty
+                              ? Image.network(_imageUrlController.text, fit: BoxFit.cover)
+                              : const Icon(Icons.image, size: 50, color: Colors.grey)),
+                        ),
+                        TextButton.icon(
+                          onPressed: _pickImage,
+                          icon: const Icon(Icons.upload),
+                          label: const Text("Seleccionar Foto"),
+                        )
+                      ],
                     )
                   else
                     TextFormField(
@@ -380,6 +409,22 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     );
   }
 
+  //Función nueva:
+  Future<void> _pickImage() async {
+    final bytes = await ImageHelper.pickAndCompress(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      quality: 75,
+    );
+    if(bytes != null) {
+      setState(() {
+        _newImageBytes = bytes;
+        _useImageUpload = true;
+      });
+    }
+  }
+
   Future<void> _saveProduct(BuildContext context) async {
     if (!_formKey.currentState!.validate()) return;
     
@@ -391,6 +436,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final price = double.tryParse(_priceController.text) ?? 0.0;
     final allergensString = _selectedAllergens.join(', ');
 
+    String currentUrl = _imageUrlController.text;
+
+    if(_useImageUpload && _newImageBytes != null) {
+      //1.-Borrar antigua si existe
+      if(widget.productToEdit != null && widget.productToEdit!.imageUrl!.isNotEmpty){
+        await ref.read(productRepositoryProvider).deleteProductImage(widget.productToEdit!.imageUrl!);
+      }
+
+      //2.-Subir nueva
+      final fileName = 'tapa_${const Uuid().v4()}.jpg';
+      currentUrl = await ref.read(productRepositoryProvider).uploadProductImage(fileName, _newImageBytes!);
+    }
+
     await ref.read(productFormControllerProvider.notifier).saveProduct(
       id: widget.productToEdit?.id, 
       name: _nameController.text,
@@ -398,8 +456,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       price: price,
       establishmentId: _selectedEstablishmentId!,
       eventId: widget.initialEventId,
-      newImage: null, 
-      currentImageUrl: _imageUrlController.text,
+      //newImage: null, 
+      //currentImageUrl: currentUrl,//_imageUrlController.text,
+      finalImageUrl: currentUrl,
       ingredients: _ingredientsController.text,
       allergens: allergensString,
     );

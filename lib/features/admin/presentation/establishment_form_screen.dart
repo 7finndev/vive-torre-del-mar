@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:torre_del_mar_app/core/utils/image_helper.dart';
 import 'package:uuid/uuid.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
@@ -43,6 +44,9 @@ class _EstablishmentFormScreenState
   final _lngController = TextEditingController();
 
   final MapController _mapController = MapController(); // <--- NUEVO
+
+  // CONTROLADOR PARA PIN CAMARERO O ESTABLECIMIENTO:
+  final _pinController = TextEditingController();
   
   bool _isPartner = true;
   bool _isActive = true;
@@ -68,6 +72,7 @@ class _EstablishmentFormScreenState
       _imageController.text = e.coverImage ?? '';
       _isPartner = e.isPartner;
       _isActive = e.isActive;
+      _pinController.text = e.waiterPin ?? '';
 
       // CARGAR GPS SI EXISTE
       if (e.latitude != null) _latController.text = e.latitude.toString();
@@ -106,11 +111,26 @@ class _EstablishmentFormScreenState
     }
   }
 
+  //Modificación para usar Helper:
   Future<void> _pickImage() async {
+    final bytes = await ImageHelper.pickAndCompress(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 768,
+      quality: 80,
+    );
+    
+    /*
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       final bytes = await image.readAsBytes();
+      setState(() {
+        _selectedImageBytes = bytes;
+      });
+    }
+    */
+    if (bytes != null) {
       setState(() {
         _selectedImageBytes = bytes;
       });
@@ -291,6 +311,65 @@ class _EstablishmentFormScreenState
 
               const SizedBox(height: 25),
 
+              // SEGURIDAD (PIN):
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Seguridad (Anti-Trampas)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _pinController,
+                            maxLength: 4,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: "PIN Camarero",
+                              hintText: "Ej: 1234",
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: const OutlineInputBorder(),
+                              counterText: "", //Oculta el contador 0/4
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.casino, color: Colors.orange),
+                                tooltip: "Generar Aleatorio",
+                                onPressed: () {
+                                  //Generar PIN aleatorio entre 1000 y 9999
+                                  final randomPin = (1000 + DateTime.now().millisecondsSinceEpoch % 9000).toString();
+                                  setState(() {
+                                    _pinController.text = randomPin;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 15),
+                        const Expanded(
+                          child: Text(
+                            "Código de 4 dígitos para validar manualmente si falla el escáner QR y/o GPS. El personal debe conocerlo.",
+                            style: TextStyle(fontSize: 12, color: Colors.black87),
+                          ),
+                        ),
+                      ],
+
+                    ),
+                  ],
+
+                ),
+
+              ),
+              
+              const SizedBox(height: 25),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -416,6 +495,13 @@ class _EstablishmentFormScreenState
           : null;
 
       if (_useImageUpload && _selectedImageBytes != null) {
+        //Limpieza: Si editamos y hay foto vieja, borramos:
+        if(widget.establishmentToEdit != null && widget.establishmentToEdit!.coverImage != null){
+          await repo.deleteEstablishmentImage(widget.establishmentToEdit!.coverImage!);
+        }
+
+        //Subida:
+        
         final fileName = '${const Uuid().v4()}.jpg';
         finalImageUrl = await repo.uploadEstablishmentImage(
           fileName,
@@ -451,6 +537,8 @@ class _EstablishmentFormScreenState
         latitude: lat,
         longitude: lng,
         // -----------------------------------
+        // AQUI VA EL CAMPO PIN
+        waiterPin: _pinController.text.trim().isEmpty ? null : _pinController.text.trim(),
       );
 
       if (widget.establishmentToEdit == null) {

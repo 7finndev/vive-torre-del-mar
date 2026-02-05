@@ -40,8 +40,7 @@ class ProductRepository {
     // A. Guardamos el PADRE (El Menú/Tapa)
     final productMap = product.toJson();
     productMap.remove('id'); // Dejamos que la DB genere el ID
-    // IMPORTANTE: Asegúrate de que tu modelo 'toJson' NO incluya la lista 'items' 
-    // o bórrala aquí para que no falle al insertar en la tabla 'event_products'
+
     productMap.remove('items'); 
     productMap.remove('product_items'); 
 
@@ -71,7 +70,7 @@ class ProductRepository {
     try {
       final response = await _client
           .from('event_products')
-          // CAMBIO CLAVE: Pedimos todas las columnas (*) Y TAMBIÉN la tabla product_items
+          // CLAVE: Pedimos todas las columnas (*) Y TAMBIÉN la tabla product_items
           .select('*, product_items(*)')
           .eq('event_id', eventId)
           .order('name', ascending: true);
@@ -86,6 +85,17 @@ class ProductRepository {
   // 4. Borrar Producto
   Future<void> deleteProduct(int productId) async {
     await _client.from('event_products').delete().eq('id', productId);
+  }
+
+  // BORRAR IMAGEN:
+  Future<void> deleteProductImage(String imageUrl) async {
+    try{
+      final uri = Uri.parse(imageUrl);
+      final fileName = uri.pathSegments.last;
+      await _client.storage.from('products').remove([fileName]);
+    } catch (e) {
+      print("⚠️ Error borrando imagen producto: $e");
+    }
   }
 
   // 5. Actualizar Producto (SOPORTE PARA MENÚS)

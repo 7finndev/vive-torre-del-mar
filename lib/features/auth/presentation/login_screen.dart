@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io'; 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+// Mantener si usas dotenv
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:torre_del_mar_app/main.dart'; 
+import 'package:torre_del_mar_app/core/widgets/web_container.dart'; // Usamos WebContainer
+import 'package:torre_del_mar_app/main.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,21 +16,30 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController(); 
-  
+  final _passwordController = TextEditingController();
+
   bool _isLoading = false;
-  bool _emailSent = false; 
-  bool _isAdminMode = false; // Lógica Admin (NUEVA)
   bool _isPasswordVisible = false;
+
+  // Variables para Magic Link (Conservadas por si acaso, pero sin uso visual actual)
+  // bool _emailSent = false; 
 
   late final StreamSubscription<AuthState> _authSubscription;
 
   @override
   void initState() {
     super.initState();
+
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (data.session != null && mounted) {
-        // El usuario ha entrado. Aquí podrías redirigir si GoRouter no lo hace solo.
+        // LÓGICA DE REDIRECCIÓN INTELIGENTE
+        // Si veníamos forzados a admin, vamos al admin. Si no, al home.
+        final uri = GoRouterState.of(context).uri;
+        if (uri.queryParameters['admin'] == 'true') {
+          context.go('/admin');
+        } else {
+          context.go('/');
+        }
       }
     });
   }
@@ -43,15 +52,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  // --- LÓGICA DE ENVÍO (Ahora leyendo del .env) ---
-  Future<void> _sendMagicLink() async {
+  // --- LÓGICA DE LOGIN CON CONTRASEÑA (ACTIVA) ---
+  Future<void> _loginWithPassword() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      return _showError("Rellena todos los campos");
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      // El listener de authState se encargará de redirigir
+      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
+  // --- LÓGICA MAGIC LINK (OCULTA / RESERVADA PARA FUTURO) ---
+  /* Future<void> _sendMagicLink() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) return _showError("Por favor, escribe tu email");
 
     setState(() => _isLoading = true);
     try {
-      // LEER DEL .ENV
-      // Usamos '??' para tener un valor por defecto de seguridad por si falla la lectura
       String redirectUrl = kIsWeb 
           ? (dotenv.env['MAGIC_LINK_URL_WEB'] ?? 'https://vivetorredelmar.7finn.es')
           : (dotenv.env['MAGIC_LINK_URL_ANDROID'] ?? 'es.sietefinn.appvivetorredelmar://login-callback');
@@ -66,35 +94,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _handleError(e);
     }
   }
-
-  Future<void> _loginWithPassword() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    if (email.isEmpty || password.isEmpty) return _showError("Rellena todos los campos");
-
-    setState(() => _isLoading = true);
-    try {
-      await Supabase.instance.client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-      // Aquí no hace falta cambiar estado manual, el auth listener lo detectará
-      if (mounted) setState(() => _isLoading = false);
-    } catch (e) {
-      _handleError(e);
-    }
-  }
+  */
 
   void _handleError(Object e) {
     if (mounted) setState(() => _isLoading = false);
-    String msg = "Error de conexión o envío.";
-    if (e.toString().contains("Invalid login")) msg = "Credenciales incorrectas.";
-    // Gestión bonita de errores de red
+    String msg = "Error de conexión.";
+    if (e.toString().contains("Invalid login")) msg = "Email o contraseña incorrectos.";
+    
+    // Gestión de errores de red
     final err = e.toString().toLowerCase();
     if (err.contains("socketexception") || err.contains("network")) {
        msg = "⚠️ Sin conexión a internet.";
-    } else if (err.contains("rate limit")) {
-       msg = "⏳ Has pedido muchos enlaces. Espera un poco.";
     }
     _showError(msg);
   }
@@ -107,164 +117,162 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Acceso")),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: _emailSent ? _buildSuccessView() : _buildFormView(),
+    return WebContainer(
+      backgroundColor: Colors.grey[100],
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Iniciar Sesión"),
+          centerTitle: true,
+          // 🔥 AQUÍ ESTÁ LA FLECHITA QUE PEDÍAS
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: "Volver",
+            onPressed: () {
+              // Si puede volver atrás (pop), vuelve. Si no, va al Home ('/')
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/');
+              }
+            },
+          ),
+        ),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _buildFormView(),
+            ),
           ),
         ),
       ),
     );
   }
 
-  // --- VISTA FORMULARIO (LA NUEVA CON ADMIN - QUE SÍ TE GUSTABA) ---
+  // --- VISTA FORMULARIO ---
   Widget _buildFormView() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(_isAdminMode ? Icons.admin_panel_settings : Icons.mark_email_unread_outlined, 
-             size: 80, color: _isAdminMode ? Colors.blueGrey : Colors.orange),
+        // ICONO GENÉRICO
+        const Icon(Icons.lock_person_outlined, size: 80, color: Colors.blueGrey),
         const SizedBox(height: 20),
         
-        Text(
-          _isAdminMode ? "Acceso Administrativo" : "Bienvenido a la Ruta",
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        const Text(
+          "Bienvenido",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 10),
         
-        Text(
-          _isAdminMode 
-            ? "Introduce tus credenciales de gestor."
-            : "Olvídate de las contraseñas.\nIntroduce tu email para entrar al instante.",
+        const Text(
+          "Introduce tus credenciales para continuar.",
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.grey),
+          style: TextStyle(color: Colors.grey),
         ),
         const SizedBox(height: 30),
         
+        // CAMPO EMAIL
         TextField(
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
           decoration: const InputDecoration(
-            labelText: "Tu correo electrónico",
-            hintText: "ejemplo@correo.com",
+            labelText: "Correo electrónico",
+            hintText: "usuario@ejemplo.com",
             border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.email),
+            prefixIcon: Icon(Icons.email_outlined),
           ),
         ),
         const SizedBox(height: 20),
 
-        if (_isAdminMode) ...[
-          TextField(
-            controller: _passwordController,
-            obscureText: !_isPasswordVisible,
-            decoration: InputDecoration(
-              labelText: "Contraseña",
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.lock),
-              suffixIcon: IconButton(
-                icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
-                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-              ),
+        // CAMPO PASSWORD
+        TextField(
+          controller: _passwordController,
+          obscureText: !_isPasswordVisible,
+          decoration: InputDecoration(
+            labelText: "Contraseña",
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.lock_outline),
+            suffixIcon: IconButton(
+              icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
+              onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
             ),
           ),
-          const SizedBox(height: 30),
-        ],
+          onSubmitted: (_) => _loginWithPassword(),
+        ),
+        const SizedBox(height: 30),
 
+        // BOTÓN ÚNICO DE ENTRADA
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _isLoading ? null : (_isAdminMode ? _loginWithPassword : _sendMagicLink),
+            onPressed: _isLoading ? null : _loginWithPassword,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _isAdminMode ? Colors.blueGrey : Colors.blue[900], // Azul para usuario (tu antiguo), Gris para Admin
+              backgroundColor: Colors.blue[900],
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: _isLoading 
               ? const SizedBox(
                   height: 20, width: 20, 
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                 )
-              : Text(
-                  _isAdminMode ? "ENTRAR COMO ADMIN" : "ENVIAR ENLACE MÁGICO ✨",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              : const Text(
+                  "ENTRAR",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
           ),
         ),
 
         const SizedBox(height: 20),
 
+        // LINK DE OLVIDO CONTRASEÑA
         TextButton(
           onPressed: () {
-            setState(() {
-              _isAdminMode = !_isAdminMode;
-              _emailSent = false;
-            });
+            _showError("Contacta con administración si has olvidado tu clave.");
           },
           child: Text(
-            _isAdminMode 
-              ? "¿Eres usuario? Entrar con enlace mágico" 
-              : "¿Entrar con email y contraseña? (Registro solo vía 'Enlace Mágico')",
+            "¿Olvidaste tu contraseña?",
             style: TextStyle(color: Colors.grey[600]),
           ),
         ),
-      ],
-    );
-  }
 
-  // --- VISTA ÉXITO (LA ANTIGUA - RESTAURADA EL RECUADRO AZUL) ---
-  Widget _buildSuccessView() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.check_circle_outline, size: 80, color: Colors.green),
         const SizedBox(height: 20),
-        const Text(
-          "¡Correo Enviado!",
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 15),
-        
-        // AQUÍ ESTÁ EL CONTENEDOR AZUL QUE TE GUSTABA
-        Container(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue.shade200)
-          ),
-          child: Column(
-            children: [
-              const Text("Hemos enviado un enlace de acceso a:", style: TextStyle(color: Colors.black54)),
-              const SizedBox(height: 5),
-              Text(
-                _emailController.text,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue),
-                textAlign: TextAlign.center,
+        const Divider(),
+        const SizedBox(height: 20),
+
+        // ENLACE AL REGISTRO
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text("¿No tienes cuenta?"),
+            TextButton(
+              onPressed: () {
+                // Navegamos a la pantalla de registro
+                // Asegúrate de tener esta ruta '/register' en tu router.dart
+                context.push('/register'); 
+              },
+              child: const Text(
+                "Regístrate aquí",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            ],
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 30),
+
+        TextButton.icon(
+          onPressed: () => context.go('/'),
+          icon: const Icon(Icons.explore_outlined, color: Colors.grey),
+          label: const Text(
+            "Seguir como invitado",
+            style: TextStyle(color: Colors.grey, fontSize: 16),
           ),
         ),
-        
-        const SizedBox(height: 20),
-        const Text(
-          "👉 Abre tu aplicación de correo en este móvil y pulsa el enlace para entrar.",
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 15),
-        ),
-        const SizedBox(height: 40),
-        TextButton.icon(
-          onPressed: () => setState(() => _emailSent = false),
-          icon: const Icon(Icons.arrow_back),
-          label: const Text("Usar otro correo / Reintentar"),
-        ),
-        const SizedBox(height: 10),
-        const Text("¿No llega? Revisa la carpeta Spam.", style: TextStyle(color: Colors.grey, fontSize: 12)),
       ],
     );
   }

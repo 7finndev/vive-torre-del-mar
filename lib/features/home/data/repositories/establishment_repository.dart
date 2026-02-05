@@ -169,6 +169,18 @@ class EstablishmentRepository {
   Future<void> deleteEstablishment(int id) async {
     await _supabase.from('establishments').delete().eq('id', id);
   }
+
+  //Nuevo Borrar Imagen:
+  Future<void> deleteEstablishmentImage(String imageUrl) async {
+    try{
+      final uri = Uri.parse(imageUrl);
+      final fileName = uri.pathSegments.last;
+      await _supabase.storage.from('establishment').remove([fileName]);
+
+    } catch (e) {
+      print("⚠️ Error borrando imagen establecimiento:$e");
+    }
+  }
 }
 
 @riverpod

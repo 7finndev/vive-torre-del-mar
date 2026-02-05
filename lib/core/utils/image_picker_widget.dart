@@ -1,20 +1,23 @@
 // Archivo: lib/core/utils/image_picker_widget.dart
 import 'dart:io';
+import 'package:flutter/foundation.dart'; // Para kIsWeb
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:mime/mime.dart'; // <--- NUEVO IMPORT
+import 'package:mime/mime.dart';
 
 class ImagePickerWidget extends StatefulWidget {
   final String? initialUrl;
   final String bucketName;
   final Function(String newUrl) onImageUploaded;
+  final double height; // Altura configurable
 
   const ImagePickerWidget({
     super.key,
     this.initialUrl,
     required this.bucketName,
     required this.onImageUploaded,
+    this.height = 250, // Hacemos el cuadro más alto por defecto
   });
 
   @override
@@ -23,6 +26,7 @@ class ImagePickerWidget extends StatefulWidget {
 
 class _ImagePickerWidgetState extends State<ImagePickerWidget> {
   File? _imageFile;
+  XFile? _webImageFile; // Para manejar web mejor
   bool _isUploading = false;
   String? _previewUrl;
 
@@ -32,7 +36,6 @@ class _ImagePickerWidgetState extends State<ImagePickerWidget> {
     _previewUrl = widget.initialUrl;
   }
 
-  // Si la URL externa cambia (ej: pegamos una URL en el modo texto), actualizamos
   @override
   void didUpdateWidget(covariant ImagePickerWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -43,37 +46,31 @@ class _ImagePickerWidgetState extends State<ImagePickerWidget> {
     }
   }
 
-Future<void> _pickAndUpload() async {
+  Future<void> _pickAndUpload() async {
     final picker = ImagePicker();
-    // Bajamos un poco la calidad para que suba rápido (opcional)
-    final XFile? picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final XFile? picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     
     if (picked == null) return;
 
     setState(() {
-      _imageFile = File(picked.path);
+      if (kIsWeb) {
+        _webImageFile = picked;
+      } else {
+        _imageFile = File(picked.path);
+      }
       _isUploading = true;
     });
 
     try {
       final supabase = Supabase.instance.client;
       
-      // --- CORRECCIÓN PARA WEB ---
-      // Usamos .name en vez de .path para sacar la extensión correctamente
       final fileExt = picked.name.split('.').last; 
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
-      final filePath = fileName; // O 'productos/$fileName' si quieres carpetas
+      final filePath = fileName;
 
-      // Intentamos obtener el mimeType. 
-      // XFile en web a veces ya lo trae. Si no, lo buscamos por el nombre.
       String mimeType = picked.mimeType ?? lookupMimeType(picked.name) ?? 'image/$fileExt';
-      // ---------------------------
 
-      // 2. Subida a Supabase
-      // NOTA: En Web, File(picked.path) a veces da problemas al subir directamente.
-      // Es más seguro leer los bytes si estamos en web, o dejar que supabase_flutter lo maneje.
-      // Para un código universal simple:
-      final bytes = await picked.readAsBytes(); // Esto funciona en Web y Móvil
+      final bytes = await picked.readAsBytes();
 
       await supabase.storage.from(widget.bucketName).uploadBinary(
         filePath,
@@ -84,7 +81,6 @@ Future<void> _pickAndUpload() async {
         ),
       );
 
-      // 3. Obtener URL Pública
       final publicUrl = supabase.storage.from(widget.bucketName).getPublicUrl(filePath);
 
       setState(() {
@@ -95,7 +91,7 @@ Future<void> _pickAndUpload() async {
       widget.onImageUploaded(publicUrl);
 
     } catch (e) {
-      print("Error subiendo: $e"); // Log para ti
+      debugPrint("Error subiendo: $e");
       setState(() => _isUploading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -105,48 +101,70 @@ Future<void> _pickAndUpload() async {
 
   @override
   Widget build(BuildContext context) {
+    // Lógica para determinar qué imagen mostrar
+    ImageProvider? imageProvider;
+    
+    if (kIsWeb && _webImageFile != null) {
+      imageProvider = NetworkImage(_webImageFile!.path); // En web, path es un blob url
+    } else if (_imageFile != null) {
+      imageProvider = FileImage(_imageFile!);
+    } else if (_previewUrl != null && _previewUrl!.isNotEmpty) {
+      imageProvider = NetworkImage(_previewUrl!);
+    }
+
     return Column(
       children: [
         GestureDetector(
           onTap: _pickAndUpload,
           child: Container(
-            height: 180,
+            height: widget.height,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: Colors.grey[200], // Fondo gris para ver los bordes de la imagen
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade400, style: BorderStyle.solid),
-              // Si tenemos imagen local, la mostramos. Si no, la URL de red.
-              image: _imageFile != null
-                  ? DecorationImage(image: FileImage(_imageFile!), fit: BoxFit.cover)
-                  : (_previewUrl != null && _previewUrl!.isNotEmpty)
-                      ? DecorationImage(
-                          image: NetworkImage(_previewUrl!), 
-                          fit: BoxFit.cover,
-                          onError: (e,s) => const Icon(Icons.broken_image), // Evita crash si la URL es mala
-                        )
-                      : null,
+              border: Border.all(color: Colors.grey.shade400, width: 1.5, style: BorderStyle.solid),
             ),
-            child: _isUploading
-                ? const Center(child: CircularProgressIndicator())
-                : (_imageFile == null && (_previewUrl == null || _previewUrl!.isEmpty))
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.cloud_upload_outlined, size: 40, color: Colors.blueGrey[300]),
-                          const SizedBox(height: 8),
-                          Text("Toca para subir imagen", style: TextStyle(color: Colors.blueGrey[400])),
-                        ],
-                      )
-                    : null,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: _isUploading
+                  ? const Center(child: CircularProgressIndicator())
+                  : imageProvider != null
+                      ? Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // 1. Imagen en modo CONTAIN (Se ve entera)
+                            Image(
+                              image: imageProvider,
+                              fit: BoxFit.contain, 
+                              errorBuilder: (c, e, s) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                            ),
+                            // 2. Icono de edición en la esquina
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.edit, color: Colors.white, size: 18),
+                              ),
+                            )
+                          ],
+                        )
+                      : Column( // Placeholder
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_photo_alternate_outlined, size: 50, color: Colors.grey[500]),
+                            const SizedBox(height: 8),
+                            Text("Subir Imagen", style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold)),
+                            Text("(JPG, PNG)", style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+                          ],
+                        ),
+            ),
           ),
         ),
-        if (_previewUrl != null || _imageFile != null)
-          TextButton.icon(
-            onPressed: _pickAndUpload, 
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text("Cambiar imagen")
-          ),
       ],
     );
   }

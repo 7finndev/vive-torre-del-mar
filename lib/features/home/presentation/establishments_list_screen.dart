@@ -10,10 +10,12 @@ class EstablishmentsListScreen extends ConsumerStatefulWidget {
   const EstablishmentsListScreen({super.key, required this.eventId});
 
   @override
-  ConsumerState<EstablishmentsListScreen> createState() => _EstablishmentsListScreenState();
+  ConsumerState<EstablishmentsListScreen> createState() =>
+      _EstablishmentsListScreenState();
 }
 
-class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScreen> {
+class _EstablishmentsListScreenState
+    extends ConsumerState<EstablishmentsListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -35,7 +37,7 @@ class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScr
   @override
   Widget build(BuildContext context) {
     final establishmentsAsync = ref.watch(establishmentsListProvider);
-    
+
     final eventAsync = ref.watch(currentEventProvider);
     Color themeColor = Colors.orange;
     if (eventAsync.hasValue && eventAsync.value != null) {
@@ -93,7 +95,7 @@ class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScr
               loading: () => const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
               ),
-              
+
               // ✅ USAMOS TU WIDGET ERRORVIEW (Envuelto en Sliver)
               error: (err, _) => SliverFillRemaining(
                 hasScrollBody: false,
@@ -110,35 +112,43 @@ class _EstablishmentsListScreenState extends ConsumerState<EstablishmentsListScr
                 final filtered = list.where((est) {
                   final q = _searchQuery.toLowerCase();
                   final matchName = est.name.toLowerCase().contains(q);
-                  final matchProduct = est.products?.any((p) => p.name.toLowerCase().contains(q)) ?? false;
+                  final matchProduct =
+                      est.products?.any(
+                        (p) => p.name.toLowerCase().contains(q),
+                      ) ??
+                      false;
                   return matchName || matchProduct;
                 }).toList();
 
                 if (filtered.isEmpty) {
                   return const SliverFillRemaining(
-                    hasScrollBody: false, 
+                    hasScrollBody: false,
                     child: Center(child: Text("No se encontraron resultados")),
                   );
                 }
 
                 return SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final est = filtered[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: EstablishmentCard(establishment: est),
-                        );
-                      },
-                      childCount: filtered.length,
+                  padding: const EdgeInsets.all(16), // Padding uniforme
+                  sliver: SliverGrid(
+                    // Cambiamos SliverList por SliverGrid
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent:
+                          400, // Ancho máximo de la tarjeta (PC: Varias columnas, Móvil: 1 columna)
+                      mainAxisExtent:
+                          130, // Altura FIJA de la tarjeta (para que no se deforme)
+                      crossAxisSpacing: 16, // Hueco horizontal
+                      mainAxisSpacing: 16, // Hueco vertical
                     ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final est = filtered[index];
+                      // Ya no necesitamos Padding extra porque SliverGrid lo gestiona con el spacing
+                      return EstablishmentCard(establishment: est);
+                    }, childCount: filtered.length),
                   ),
                 );
               },
             ),
-            
+
             const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
           ],
         ),

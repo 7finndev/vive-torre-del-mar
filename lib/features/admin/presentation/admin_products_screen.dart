@@ -17,7 +17,6 @@ import 'providers/admin_products_providers.dart';
 // IMPORTANTE: Importa el provider de la lista de establecimientos
 // (Ajusta la ruta si tu provider está en otro sitio, suele estar en home/presentation/providers)
 //import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart'; 
-import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
 
 class AdminProductsScreen extends ConsumerStatefulWidget {
   const AdminProductsScreen({super.key});
@@ -49,7 +48,7 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestión de Participaciones'),
+        title: const Text('Gestión de Productos'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
@@ -225,7 +224,7 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               
                               onTap: () {
-                                context.push('/admin/participaciones/detail', extra: product);
+                                context.push('/admin/products/detail', extra: product);
                               },
 
                               // IMAGEN
@@ -379,8 +378,3 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen> {
     );
   }
 }
-// Este provider trae TODOS los bares, sin importar eventos activos/inactivos
-final adminAllEstablishmentsProvider = FutureProvider<List<EstablishmentModel>>((ref) async {
-  final repo = ref.watch(establishmentRepositoryProvider);
-  return repo.getAllEstablishments();
-});

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart'; // <--- NECESARIO
 import 'package:image_picker/image_picker.dart'; // <--- USAMOS EL PAQUETE ESTÁNDAR
+import 'package:torre_del_mar_app/core/utils/image_helper.dart';
 import 'package:uuid/uuid.dart'; // Para generar nombres de archivo
 import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/event_repository.dart';
@@ -98,16 +99,23 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
   // --- SELECCIÓN DE IMÁGENES (Clean Architecture) ---
   Future<void> _pickImage(bool isLogo) async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    // Definimos reglas estrictas según si es Logo o Fondo
+    // Logo: Pequeño (300x300), Calidad Media
+    // Fondo: Grande (1280x720), Calidad Alta
     
-    if (image != null) {
-      final bytes = await image.readAsBytes();
+    final compressedBytes = await ImageHelper.pickAndCompress(
+      source: ImageSource.gallery,
+      maxWidth: isLogo ? 300 : 1280, 
+      maxHeight: isLogo ? 300 : 720,
+      quality: isLogo ? 85 : 75, // Los fondos pueden comprimirse más
+    );
+    
+    if (compressedBytes != null) {
       setState(() {
         if (isLogo) {
-          _newLogoBytes = bytes;
+          _newLogoBytes = compressedBytes;
         } else {
-          _newBgBytes = bytes;
+          _newBgBytes = compressedBytes;
         }
       });
     }
@@ -364,7 +372,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
   Future<void> _saveEvent() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // --- NUEVA VALIDACIÓN DE FECHAS ---
+    // --- VALIDACIÓN DE FECHAS ---
     // Si la fecha de fin es ANTES que la de inicio, mostramos error y paramos.
     if (_endDate.isBefore(_startDate)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -387,15 +395,22 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       String? finalLogoUrl = _logoUrlController.text.isNotEmpty ? _logoUrlController.text : null;
       String? finalBgUrl = _bgImageUrlController.text.isNotEmpty ? _bgImageUrlController.text : null;
 
-      // 1. SUBIR LOGO SI HAY NUEVO
+      // 1. GESTIÓN LOGO (Borrar viejo y subir nuevo)
       if (_newLogoBytes != null) {
+        //Si editamos y ya habia logo, lo borramos:
+        if(widget.eventToEdit != null && widget.eventToEdit!.logoUrl != null) {
+          await repo.deleteEventImage(widget.eventToEdit!.logoUrl!);
+        }
+
          final name = 'logo_${const Uuid().v4()}.jpg';
-         // ASUMIENDO QUE TIENES ESTE MÉTODO EN EL REPO (Cópialo del EstablishmentRepo)
          finalLogoUrl = await repo.uploadEventImage(name, _newLogoBytes!); 
       }
 
-      // 2. SUBIR FONDO SI HAY NUEVO
+      // 2. GESTIÓN FONDO (Borrar viejo y subir nuevo):
       if (_newBgBytes != null) {
+        if(widget.eventToEdit != null && widget.eventToEdit!.bgImageUrl != null) {
+          await repo.deleteEventImage(widget.eventToEdit!.bgImageUrl!);
+        }
          final name = 'bg_${const Uuid().v4()}.jpg';
          finalBgUrl = await repo.uploadEventImage(name, _newBgBytes!);
       }
