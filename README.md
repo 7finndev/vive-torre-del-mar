@@ -3,49 +3,61 @@
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?style=for-the-badge&logo=flutter)
 ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green?style=for-the-badge&logo=supabase)
 ![Riverpod](https://img.shields.io/badge/State-Riverpod_2.0-purple?style=for-the-badge)
+![Hive](https://img.shields.io/badge/Offline-Hive_NoSQL-orange?style=for-the-badge)
 
-Una solución integral multiplataforma (Móvil + Web/Desktop) para la gestión y participación digital en el evento gastronómico "Ruta de la Tapa" de Torre del Mar así como otros eventos.
-El proyecto se ha diseñado con propósito multi eventos, para gestionar distintos eventos ("Ruta de la Tapa", "Ruta del Coctel", "Ruta Gastronómica", "Sorteos", etc).
+Una solución integral multiplataforma (Móvil + Web PWA) diseñada bajo una arquitectura **Offline-First** para la gestión y participación digital en eventos gastronómicos de la ACET, comenzando por la "Ruta de la Tapa" de Torre del Mar.
 
-El proyecto digitaliza la experiencia tradicional del "Pasaporte de Tapas", permitiendo votaciones en tiempo real, validación de visitas mediante QR geolocalizado y un panel administrativo robusto.
+El proyecto digitaliza la experiencia tradicional del pasaporte físico, introduce mecanismos **anti-fraude** y permite la participación sin dependencia de internet continua.
 
 ---
 
-## 📱 Funcionalidades
+## 📚 Documentación Completa
 
-### 👤 Aplicación de Usuario (Móvil)
-Diseñada para los asistentes al evento.
-* **Pasaporte Digital:** Sellado virtual de visitas.
-* **Escáner QR Inteligente:** Valida la visita cruzando el código UUID del local con la ubicación GPS del usuario (Geo-fencing).
-* **Votaciones:** Valoración de tapas (0-5 estrellas) sincronizadas en tiempo real.
-* **Mapa Interactivo:** Visualización de establecimientos participantes con marcadores personalizados.
-* **Modo Offline:** Sincronización automática de votos cuando se recupera la conexión.
+Para profundizar en el desarrollo, despliegue y uso, consulta la carpeta `/docs`:
 
-### 🛠️ Panel de Administración (Web / Desktop)
-Herramienta de gestión para la ACET (Asociación de Comerciantes).
-* **Dashboard:** Métricas clave en tiempo real.
-* **Gestión de Socios:** CRUD completo de establecimientos con logos e información de contacto interna.
-* **Generador de QR:** Creación automática y descarga de carteles QR únicos para cada establecimiento.
-* **Gestión de Productos:** Asignación de tapas/cócteles a cada local.
-* **Seguridad:** Acceso restringido basado en roles (Row Level Security).
+* 📘 **[Documentación Técnica](docs/TECHNICAL_DOCUMENTATION.md):** Arquitectura, sincronización offline y estructura de código.
+* 🚀 **[Guía de Despliegue](docs/02_Guia_Despliegue.md):** Configuración de entorno y subida a producción.
+* 👨‍💼 **[Manual de Administración](docs/03_Manual_Administrador.md):** Gestión de eventos, pines de seguridad y recursos gráficos.
+* 👁️ **[Visión y Alcance](docs/01_Vision_y_Alcance.md):** Objetivos del proyecto y actores.
+
+---
+
+## 📱 Funcionalidades Clave
+
+### 👤 Aplicación de Usuario (Móvil & Web)
+* **Offline-First Real:** Navegación, consulta de mapas y votaciones disponibles sin conexión a internet.
+* **Sincronización Inteligente (`SyncService`):** Los votos realizados offline se guardan localmente y se suben a la nube automáticamente al recuperar la red.
+* **Validación Anti-Fraude (Triple Capa):**
+    1.  **Geo-fencing:** Validación GPS (<300m del local).
+    2.  **QR Único:** UUID encriptado por establecimiento.
+    3.  **PIN Camarero (Nuevo):** Código de respaldo de 4 dígitos para validación manual si falla la tecnología.
+* **Pasaporte Digital:** Sellado virtual y control de progreso.
+* **Noticias:** Feed integrado con `torredelmar.org` (con proxy CORS para Web).
+
+### 🛠️ Panel de Administración (Web)
+* **Gestión de Seguridad:** Visualización y regeneración de **PINs de Camarero** (manuales o aleatorios).
+* **Analítica Híbrida:** Rastreo de usuarios registrados y dispositivos anónimos para métricas de conversión.
+* **Gestión de Contenido:** CRUD de establecimientos, eventos y productos con compresión automática de imágenes.
+* **Descargas:** Generación de cartelería QR lista para imprimir.
 
 ---
 
 ## 🏗️ Arquitectura Técnica
 
-El proyecto sigue una **Clean Architecture** basada en "Features" (Funcionalidades), asegurando que el código sea escalable, testeable y fácil de mantener.
+El proyecto sigue una arquitectura **Clean Architecture** modularizada por *Features*, utilizando **Riverpod** para la inyección de dependencias y gestión de estado.
 
 ### Estructura de Carpetas
 ```text
 lib/
-├── core/            # Utilidades compartidas, Router, Tema, Constantes
-├── features/        # Módulos funcionales
-│   ├── auth/        # Login y Gestión de Perfil
-│   ├── admin/       # Lógica del Panel Administrativo
-│   ├── home/        # Listados, Detalle de Tapas, Mapa
-│   ├── scan/        # Lógica de Cámara, QR y Geolocalización
-│   └── hub/         # Shell de navegación principal
-└── main.dart        # Punto de entrada
+├── core/            # Motores: LocalDb (Hive), SyncService, Networking
+├── features/        # Módulos de negocio
+│   ├── auth/        # Autenticación
+│   ├── admin/       # Panel de control y gestión de PINs
+│   ├── home/        # Repositorios de datos y lógica offline
+│   ├── scan/        # Lógica de Voto, GPS, Cámara y Sincronización
+│   ├── hub/         # Noticias y Dashboard Usuario
+│   └── map/         # Integración OpenStreetMap
+└── main.dart        # Inicialización
 
 ```
 
@@ -70,6 +82,7 @@ lib/
 
 * Flutter SDK instalado.
 * Proyecto en Supabase configurado.
+* Docker (Opcional, para pruebas de servidor web local).
 
 ### Configuración
 
@@ -94,18 +107,15 @@ const supabaseKey = 'TU_KEY_SUPABASE';
 
 ```
 
+4. Generación de Código (Importante): Al usar Riverpod Generator y Hive, es necesario ejecutar:
+```Bash
+    dart pub run build_runner build --delete-conflicting-outputs
+```
 
-4. Ejecutar la App:
+5. Ejecutar la App:
 * **Móvil:** `flutter run` (Seleccionar emulador/dispositivo).
-* **Admin:** `flutter run -d chrome` o `flutter run -d macos/windows`.
+* **Web:** `./build_web.sh (Script de producttión) o flutter run -d chrome` o `flutter run -d macos/windows`.
 
-
-
----
-
-## 🔮 Futuro del Proyecto
-
-El sistema está diseñado de forma **desacoplada**. Actualmente utiliza Supabase para una iteración rápida.
 
 ---
 
