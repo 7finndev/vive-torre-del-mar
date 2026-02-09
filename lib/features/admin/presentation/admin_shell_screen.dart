@@ -112,6 +112,17 @@ class _AdminMenuContent extends StatelessWidget {
                   padding: EdgeInsets.only(left: 16, bottom: 8),
                   child: Text("DATOS", style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
+
+                // 1. NOTICIAS (NUEVO) 🆕
+                ListTile(
+                  leading: const Icon(Icons.newspaper, color: Colors.white70),
+                  title: const Text("Noticias", style: TextStyle(color: Colors.white70)),
+                  onTap: () {
+                    _closeDrawer(context);
+                    context.push('/admin/news'); // Navegamos a la ruta nueva
+                  },
+                ),
+
                 ListTile(
                   leading: const Icon(Icons.monetization_on, color: Colors.white70),
                   title: const Text("Patrocinadores", style: TextStyle(color: Colors.white70)),

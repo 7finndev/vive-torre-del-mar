@@ -43,6 +43,9 @@ class _HubScreenState extends ConsumerState<HubScreen> {
     final eventsAsync = ref.watch(adminEventsListProvider);
     final sponsorsAsync = ref.watch(sponsorsListProvider);
 
+    // Escuchamos el rol del usuario
+    final roleAsync = ref.watch(userRoleProvider);
+
     // Detectamos si es PC
     final isDesktop = MediaQuery.of(context).size.width > 600;
 
@@ -117,6 +120,34 @@ class _HubScreenState extends ConsumerState<HubScreen> {
                       elevation: 0,
                       centerTitle: false,
                       actions: [
+                        //Boton Admin (solo visible si eres Admin):
+                        roleAsync.when(
+                          data: (role) {
+                            if(role == 'admin'){
+                              return IconButton(
+                                tooltip: "Panel de Control",
+                                icon: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.admin_panel_settings,
+                                    color: Colors.deepOrange,
+                                    size: 24,
+                                  ),
+                                ),
+                                onPressed: () => context.go('/admin'),
+                              );
+                            }
+                            return const SizedBox.shrink(); //Si es usuario normal, no mostramos nada.
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
+                        ),
+                        
+                        //Boton de menú:
                         IconButton(
                           icon: const Icon(
                             Icons.menu,

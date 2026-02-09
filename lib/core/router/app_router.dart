@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 // UTILS
 import 'package:torre_del_mar_app/core/router/go_router_refresh_stream.dart';
+import 'package:torre_del_mar_app/features/admin/presentation/admin_news_screen.dart';
 import 'package:torre_del_mar_app/features/admin/presentation/admin_user_screen.dart';
 import 'package:torre_del_mar_app/features/admin/presentation/screens/admin_sponsors_screen.dart';
 
@@ -229,6 +230,11 @@ GoRouter appRouter(AppRouterRef ref) {
                     return const AdminSponsorsScreen();
                   },
                 ),
+                // Sub-ruta: Noticias (NUEVA) 🆕
+                  GoRoute(
+                    path: 'news', // --> /admin/news
+                    builder: (context, state) => const AdminNewsScreen(),
+                  ),
               ]
             ),
           ]),
