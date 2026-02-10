@@ -7,6 +7,8 @@ import 'package:torre_del_mar_app/features/admin/data/dashboard_repository.dart'
 import 'package:torre_del_mar_app/features/home/data/models/event_model.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/event_repository.dart';
 
+import 'package:go_router/go_router.dart';
+
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
 
@@ -118,7 +120,7 @@ class AdminDashboardScreen extends ConsumerWidget {
 }
 
 // -----------------------------------------------------------
-// 📊 TAB 1: RESUMEN
+// 📊 TAB 1: RESUMEN (RESPONSIVO REAL)
 // -----------------------------------------------------------
 class _SummaryTab extends StatelessWidget {
   final DashboardStats stats;
@@ -129,26 +131,79 @@ class _SummaryTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false, bottom: false,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (selectedEvent != null) ...[_EventStatusBanner(event: selectedEvent!), const SizedBox(height: 16)],
-          const Text("Métricas Clave", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-          const SizedBox(height: 10),
-          LayoutBuilder(builder: (context, constraints) {
-            int crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
-            double ratio = constraints.maxWidth > 600 ? 1.5 : 1.3; 
-            return GridView.count(
-              crossAxisCount: crossAxisCount, crossAxisSpacing: 12, mainAxisSpacing: 12, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), childAspectRatio: ratio,
-              children: [
-                _StatCard(title: 'Escaneos', value: stats.totalScans.toString(), icon: Icons.qr_code, color: Colors.indigo),
-                _StatCard(title: 'Usuarios', value: stats.totalUsers.toString(), icon: Icons.people, color: Colors.blue),
-                _StatCard(title: 'Productos', value: stats.activeProducts.toString(), icon: Icons.restaurant, color: Colors.orange),
-                _StatCard(title: 'Socios', value: stats.activeEstablishments.toString(), icon: Icons.store, color: Colors.teal),
+      child: Align(
+        alignment: Alignment.topCenter, // Centramos el contenido en pantallas grandes
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1200), // Ancho máximo para PC
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (selectedEvent != null) ...[
+                _EventStatusBanner(event: selectedEvent!), 
+                const SizedBox(height: 16)
               ],
-            );
-          }),
-        ],
+              
+              const Text("Métricas Clave", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+              const SizedBox(height: 10),
+              
+              // GRÁFICA RESPONSIVA (GRID)
+              LayoutBuilder(builder: (context, constraints) {
+                // Si es ancho > 600 (Tablet/PC) usa 4 columnas, si no 2.
+                final int crossAxisCount = constraints.maxWidth > 800 ? 4 : 2;
+                // Ajustamos el ratio para que las tarjetas no se vean ni muy altas ni muy chatas
+                final double ratio = constraints.maxWidth > 800 ? 1.8 : 1.4; 
+                
+                return GridView.count(
+                  crossAxisCount: crossAxisCount, 
+                  crossAxisSpacing: 12, 
+                  mainAxisSpacing: 12, 
+                  shrinkWrap: true, 
+                  physics: const NeverScrollableScrollPhysics(), 
+                  childAspectRatio: ratio,
+                  children: [
+                    _StatCard(title: 'Escaneos', value: stats.totalScans.toString(), icon: Icons.qr_code, color: Colors.indigo),
+                    _StatCard(title: 'Usuarios', value: stats.totalUsers.toString(), icon: Icons.people, color: Colors.blue),
+                    _StatCard(title: 'Productos', value: stats.activeProducts.toString(), icon: Icons.restaurant, color: Colors.orange),
+                    _StatCard(title: 'Socios', value: stats.activeEstablishments.toString(), icon: Icons.store, color: Colors.teal),
+                  ],
+                );
+              }),
+
+              const SizedBox(height: 30),
+              
+              const Text("Acciones Rápidas", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+              const SizedBox(height: 10),
+              
+              // Aquí usamos LayoutBuilder para decidir si mostramos las acciones en lista o grid
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: [
+                      // En PC ocupa la mitad o un tercio, en móvil todo el ancho
+                      SizedBox(
+                        width: constraints.maxWidth > 800 
+                            ? (constraints.maxWidth - 16) / 2 // Mitad del ancho en PC
+                            : constraints.maxWidth, // Todo el ancho en móvil
+                        child: _ActionCard(
+                          icon: Icons.qr_code_scanner,
+                          title: "Validar Ganadores",
+                          subtitle: "Comprobar requisitos de sorteo",
+                          color: Colors.purple,
+                          onTap: () => context.go('/admin/check-winner'),
+                        ),
+                      ),
+                      // Aquí podrías añadir más acciones en el futuro (ej: Crear Evento)
+                    ],
+                  );
+                }
+              ),
+              
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -366,4 +421,79 @@ class _LegendIndicator extends StatelessWidget {
 class _EventStatusBanner extends StatelessWidget {
   final EventModel event; const _EventStatusBanner({required this.event});
   @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(8), color: Colors.blue[50], child: Text(event.status));
+}
+
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0, // Plano para diseño moderno
+      margin: EdgeInsets.zero, // El margen lo controla el contenedor padre
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Icono con fondo suave
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              const SizedBox(width: 16),
+              
+              // Textos (Con protección anti-desbordamiento)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Flechita
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -1,4 +1,5 @@
-import 'dart:typed_data'; // NECESARIO para Uint8List
+// NECESARIO para Uint8List
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../datasources/auth_service.dart';
 
@@ -90,6 +91,47 @@ class AuthRepository {
       if (res.user == null) {
         throw 'No se pudo actualizar el perfil en la base de datos';
       }
+    }
+  }
+
+  // --- RECUPERACIÓN DE CONTRASEÑAS ---
+  //.-Enviar correo con enlace mágico:
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      //Determinamos a dónde volverá el usuario
+      //En Web: localhost o tu dominio real
+      //En móvil: io.supabase.flutter://reset-callback/ (Debes configurar Deep Links si no lo has hecho)
+      //Por ahora, usaremos una redirección genérica que funciona bien en la mayoria de los casos.
+      String redirectUrl;
+      if(kIsWeb){
+        //Si estamos depuranbdo en local --> localhost:3000
+        //Si estamos en producción --> acet.universoweb.pro
+        redirectUrl = kDebugMode
+          ? 'http://localhost:3000/update-password'
+          : 'https://acet.universoweb.pro/update-password';
+      } else {
+        //Para Android/ios (Deep Link)
+        redirectUrl = 'es.sietefinn.appvivetorredelmar://login-callback/';
+      }
+
+      await _client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: redirectUrl,
+      );
+    } catch (e) {
+      throw Exception('Error enviando correo de recuperación: $e');
+    }
+  }
+
+  //.-Guardar nueva contraseña (mediante link):
+  Future<void> updateUserPassword(String newPassword) async{
+    try{
+      final res = await _client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      if(res.user == null) throw 'No se pudo actualizar la contraseña';
+    } catch (e) {
+      throw Exception ('Error actualizando contraseña: $e');
     }
   }
 }

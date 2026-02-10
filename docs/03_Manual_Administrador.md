@@ -41,3 +41,19 @@ Para asegurar el rendimiento de la App (velocidad de carga) y una estética corr
 | **Icono de Categoría/Ranking** | **128 x 128** | PNG / SVG | 20 KB | Iconos pequeños en listas. |
 
 > **Nota:** La aplicación incluye un compresor automático (`ImageHelper`). Aunque subas una imagen de 5MB, el sistema intentará reducirla, pero siempre es mejor subirla optimizada de origen para ahorrar datos y tiempo de subida.
+
+## 5. Herramienta: Validar Ganadores (Sorteos)
+
+Nueva funcionalidad para comprobar si un usuario cumple los requisitos para participar en un sorteo.
+
+### Pasos para validar:
+1.  Accede al Panel de Control -> Sección **Acciones** -> **Validar Ganadores**.
+2.  **Configuración:**
+    * Selecciona el **Evento** en el desplegable (ej: "Ruta de la Tapa 2026").
+    * Define el **Nº Mínimo de Sellos** necesarios (por defecto 10, pero es editable).
+3.  **Escaneo:**
+    * Pulsa el icono del **Código QR** dentro del campo de texto.
+    * Apunta con la cámara al QR del móvil del usuario (disponible en su Perfil).
+4.  **Resultado:**
+    * El sistema indicará si es **APTO (Verde)** o **NO APTO (Rojo)**.
+    * Mostrará los datos de contacto del usuario (Nombre, Email, Teléfono) para el sorteo.

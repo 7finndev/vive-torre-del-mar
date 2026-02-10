@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:torre_del_mar_app/core/widgets/web_container.dart'; // Usamos WebContainer
+import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:torre_del_mar_app/main.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -22,7 +23,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isPasswordVisible = false;
 
   // Variables para Magic Link (Conservadas por si acaso, pero sin uso visual actual)
-  // bool _emailSent = false; 
+  // bool _emailSent = false;
 
   late final StreamSubscription<AuthState> _authSubscription;
 
@@ -30,7 +31,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
 
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
       if (data.session != null && mounted) {
         // LÓGICA DE REDIRECCIÓN INTELIGENTE
         // Si veníamos forzados a admin, vamos al admin. Si no, al home.
@@ -99,12 +102,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _handleError(Object e) {
     if (mounted) setState(() => _isLoading = false);
     String msg = "Error de conexión.";
-    if (e.toString().contains("Invalid login")) msg = "Email o contraseña incorrectos.";
-    
+    if (e.toString().contains("Invalid login")) {
+      msg = "Email o contraseña incorrectos.";
+    }
+
     // Gestión de errores de red
     final err = e.toString().toLowerCase();
     if (err.contains("socketexception") || err.contains("network")) {
-       msg = "⚠️ Sin conexión a internet.";
+      msg = "⚠️ Sin conexión a internet.";
     }
     _showError(msg);
   }
@@ -112,6 +117,66 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _showError(String msg) {
     rootScaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red),
+    );
+  }
+
+  //Logica de Restablecimiento de Contraseña (LRC):
+  void _showResetDialog(BuildContext context) {
+    final emailCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Recuperar Contraseña"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Te enviaremos un enlace para crear una nueva contraseña.",
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: "Tu correo electrónico",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.email),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final email = emailCtrl.text.trim();
+              if (email.isEmpty) return;
+
+              Navigator.pop(ctx); //Cerramos diálogo
+
+              try {
+                //Usamos el Provider para llamar al repo
+                await ref
+                    .read(authRepositoryProvider)
+                    .sendPasswordResetEmail(email);
+
+                if (mounted) {
+                  _showError(
+                    "Si el correo está registrado, recibirás un enlace en breve. Revisa Spam.",
+                  );
+                }
+              } catch (e) {
+                if (mounted) _showError("Error: $e");
+              }
+            },
+            child: const Text("Enviar"),
+          ),
+        ],
+      ),
     );
   }
 
@@ -156,23 +221,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // ICONO GENÉRICO
-        const Icon(Icons.lock_person_outlined, size: 80, color: Colors.blueGrey),
+        const Icon(
+          Icons.lock_person_outlined,
+          size: 80,
+          color: Colors.blueGrey,
+        ),
         const SizedBox(height: 20),
-        
+
         const Text(
           "Bienvenido",
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 10),
-        
+
         const Text(
           "Introduce tus credenciales para continuar.",
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.grey),
         ),
         const SizedBox(height: 30),
-        
+
         // CAMPO EMAIL
         TextField(
           controller: _emailController,
@@ -195,8 +264,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.lock_outline),
             suffixIcon: IconButton(
-              icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
-              onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+              icon: Icon(
+                _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+              ),
+              onPressed: () =>
+                  setState(() => _isPasswordVisible = !_isPasswordVisible),
             ),
           ),
           onSubmitted: (_) => _loginWithPassword(),
@@ -213,17 +285,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: _isLoading 
-              ? const SizedBox(
-                  height: 20, width: 20, 
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                )
-              : const Text(
-                  "ENTRAR",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+            child: _isLoading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text(
+                    "ENTRAR",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
           ),
         ),
 
@@ -231,9 +309,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
         // LINK DE OLVIDO CONTRASEÑA
         TextButton(
+          /*
           onPressed: () {
             _showError("Contacta con administración si has olvidado tu clave.");
           },
+          */
+          onPressed: () => _showResetDialog(context),
           child: Text(
             "¿Olvidaste tu contraseña?",
             style: TextStyle(color: Colors.grey[600]),
@@ -253,7 +334,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               onPressed: () {
                 // Navegamos a la pantalla de registro
                 // Asegúrate de tener esta ruta '/register' en tu router.dart
-                context.push('/register'); 
+                context.push('/register');
               },
               child: const Text(
                 "Regístrate aquí",

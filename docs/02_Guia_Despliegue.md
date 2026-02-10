@@ -16,7 +16,22 @@ SUPABASE_URL=[https://tu-proyecto.supabase.co](https://tu-proyecto.supabase.co)
 # Si se regenera el JWT Secret, esta clave debe actualizarse aquí.
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6Ik...
 ```
-## 3. Comandos de Desarrollo
+
+## 3. Configuración de Servicios Externos
+
+### A. Supabase Auth (Recuperación de Contraseña)
+Para que el enlace de "Restablecer contraseña" funcione, debes configurar las **Redirect URLs** en tu panel de Supabase (*Authentication -> URL Configuration*):
+
+* **Localhost:** `http://localhost:3000/update-password`
+* **Producción Web:** `https://tu-dominio.com/update-password`
+* **Móvil (Deep Link):** `es.sietefinn.appvivetorredelmar://login-callback/`
+
+### B. Permisos de Cámara (Android/iOS)
+El módulo de administración requiere acceso a la cámara.
+* **Android:** Asegúrate de que `AndroidManifest.xml` incluye `<uses-permission android:name="android.permission.CAMERA" />`.
+* **iOS:** El archivo `Info.plist` debe tener la clave `NSCameraUsageDescription`.
+
+## 4. Comandos de Desarrollo
 Generación de Código (Riverpod/Hive/Json)
 
 Ejecutar cada vez que se modifique un Modelo o un Provider:
@@ -35,7 +50,7 @@ flutter run -d chrome --web-renderer html
 flutter run -d <id_dispositivo>
 ```
 
-## 4. Despliegue a Producción (Web)
+## 5. Despliegue a Producción (Web)
 
 Se utiliza el script automatizado ./build_web.sh que realiza:
 

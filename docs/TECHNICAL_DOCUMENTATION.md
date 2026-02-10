@@ -160,6 +160,7 @@ El proyecto sigue una arquitectura modular (**Feature-First**). Cada funcionalid
 *Panel de control para gestores. Solo accesible con rol 'admin'.*
 * **`presentation/`**: Pantallas (Screens).
     * `admin_dashboard_screen.dart`: Gráficas y resumen.
+    * `admin_winner_check_screen.dart`: Lógica de escáner de cámara, selector de eventos y validación de reglas de negocio (conteo de votos en Supabase).
     * `admin_establishments_screen.dart`: Lista CRUD de bares.
     * `establishment_form_screen.dart`: Formulario de alta/edición (incluye mapa y PIN).
     * `admin_sponsors_screen.dart`: Gestión de patrocinadores.
@@ -168,6 +169,7 @@ El proyecto sigue una arquitectura modular (**Feature-First**). Cada funcionalid
 *Gestión de usuarios.*
 * `auth_repository.dart`: Conecta con Supabase Auth (Login, Registro, Logout).
 * `profile_screen.dart`: Pantalla de edición de usuario y avatar.
+* `update_password_screen.dart`: Pantalla de formulario para introducir la nueva contraseña tras el clic en el email.
 
 ### 3. 🏠 Home (`features/home/`)
 *Lógica principal pública (Bares, Tapas, Eventos).*

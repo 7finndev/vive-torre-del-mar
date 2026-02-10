@@ -40,6 +40,11 @@ Para profundizar en el desarrollo, despliegue y uso, consulta la carpeta `/docs`
 * **Gestión de Contenido:** CRUD de establecimientos, eventos y productos con compresión automática de imágenes.
 * **Descargas:** Generación de cartelería QR lista para imprimir.
 
+### ✨ Novedades Versión Actual (v1.1.2)
+
+* **🔐 Recuperación de Contraseña:** Flujo completo vía Email con Deep Linking (Web y Móvil).
+* **📸 Escáner para Administradores:** Herramienta interna para validar ganadores de sorteos mediante lectura de QR, con configuración de evento y umbral de votos.
+* **🆔 Perfil 2.0:** Nueva interfaz responsiva (Escritorio/Móvil) con tarjeta de identidad digital y código QR ampliable para fácil lectura.
 ---
 
 ## 🏗️ Arquitectura Técnica
