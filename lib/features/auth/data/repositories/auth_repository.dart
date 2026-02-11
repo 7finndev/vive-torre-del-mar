@@ -1,7 +1,7 @@
 // NECESARIO para Uint8List
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../datasources/auth_service.dart';
+import 'package:torre_del_mar_app/features/auth/data/datasources/auth_service.dart';
 
 class AuthRepository {
   final AuthService _authService;
@@ -90,6 +90,24 @@ class AuthRepository {
       
       if (res.user == null) {
         throw 'No se pudo actualizar el perfil en la base de datos';
+      }
+
+      try{
+        final profileUpdates = {
+          if(name != null) 'full_name' : name,
+          if(phone != null) 'phone' : phone,
+          if(updates.containsKey('avatar_url')) 'avatar_url' : updates['avatar_url'],
+          'updated_at' : DateTime.now().toIso8601String(),
+        };
+
+        await _client
+          .from('profiles')
+          .update(profileUpdates)
+          .eq('id', userId);
+      } catch (e) {
+        //Si falla aquí, hay problemas de permisos RLS en Supabase
+        print('⚠️ Error al actualizar la tabla profiles: $e');
+        throw 'Error al guardar los datos públicos: $e';
       }
     }
   }

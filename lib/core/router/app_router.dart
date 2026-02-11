@@ -52,7 +52,13 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 @riverpod
 GoRouter appRouter(AppRouterRef ref) {
   final authState = ref.watch(authStateProvider);
-  final authStream = ref.watch(authStateProvider.stream);
+  
+  //Modificación para corregir salto de pantalla (a pantalla inicial) 
+  //  al actualizar datos del perfil.
+  //final authStream = ref.watch(authStateProvider.stream);
+  final authStream = Supabase.instance.client.auth.onAuthStateChange.where(
+    (data) => data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.signedOut
+  );
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,

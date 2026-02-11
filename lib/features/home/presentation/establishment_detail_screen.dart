@@ -529,7 +529,12 @@ class _EstablishmentDetailScreenState extends ConsumerState<EstablishmentDetailS
                     initialZoom: 15.0,
                   ),
                   children: [
-                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                    
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'es.sietefinn.appvivetorredelmar',
+                    ),
+                    
                     if (routePoints.isNotEmpty) PolylineLayer(polylines: [Polyline(points: routePoints, strokeWidth: 5.0, color: Colors.blueAccent)]),
                     MarkerLayer(markers: [
                       Marker(point: LatLng(widget.establishment.latitude!, widget.establishment.longitude!), width: 60, height: 60, child: const Icon(Icons.location_on, color: Colors.red, size: 50)),

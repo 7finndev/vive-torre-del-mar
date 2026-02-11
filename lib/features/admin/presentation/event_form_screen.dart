@@ -151,6 +151,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _selectedType,
                       decoration: const InputDecoration(labelText: 'Tipo', border: OutlineInputBorder()),
                       items: const [
@@ -165,6 +166,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _statusMap.containsKey(_selectedStatus) ? _selectedStatus : null,
                       decoration: const InputDecoration(labelText: 'Estado', border: OutlineInputBorder()),
                       items: _statusMap.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
@@ -201,6 +203,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
               const Text("Tipografía", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
               const SizedBox(height: 5),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _selectedFont,
                 decoration: const InputDecoration(border: OutlineInputBorder(), filled: true, fillColor: Colors.white),
                 items: _googleFontsList.map((font) {
@@ -293,7 +296,12 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
   }
   */
   Widget _buildImagePickerZone(String title, bool isLogo, Uint8List? newBytes, String currentUrl) {
-    return Column(
+    // Definir texto dinámico
+    final helperText = isLogo 
+        ? "💡 Recomendado: Logo cuadrado (300x300 px), Calidad 80%."
+        : "💡 Recomendado: Fondo panorámico (1280x720 px), Calidad 75%.";
+        
+      return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -325,6 +333,11 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
           onPressed: () => _pickImage(isLogo),
           icon: const Icon(Icons.upload_file, size: 18),
           label: Text(newBytes != null ? "Cambiar Selección" : "Seleccionar Imagen"),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          helperText,
+          style: const TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
         ),
       ],
     );

@@ -132,33 +132,33 @@ class _AdminEstablishmentsScreenState extends ConsumerState<AdminEstablishmentsS
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   
                   // --- AQUÍ ESTÁ EL CAMBIO DE IMAGEN ---
-                  leading: SizedBox(
-                    width: 60,  // Un poco más grande para que se vea bien
+                  leading: Container(
+                    width: 60,
                     height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white, // Fondo blanco por si la foto no es cuadrada
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300), // Borde elegante
+                    ),
                     child: imageUrl != null
                         ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8), // Bordes redondeados
+                            borderRadius: BorderRadius.circular(8),
                             child: Image.network(
                               imageUrl,
-                              fit: BoxFit.cover, // <--- AQUÍ EVITAMOS EL ESTIRAMIENTO
+                              // 🔥 EL SECRETO: 'contain' muestra TODA la imagen sin recortar
+                              fit: BoxFit.contain, 
                               errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.broken_image, color: Colors.grey),
-                                );
+                                return const Icon(Icons.broken_image, color: Colors.grey);
                               },
                             ),
                           )
-                        : CircleAvatar(
-                            backgroundColor: bar.isPartner ? Colors.orange.shade100 : Colors.grey[200],
-                            child: Icon(
-                              Icons.store, 
-                              color: bar.isPartner ? Colors.orange[800] : Colors.grey
-                            ),
+                        : Icon(
+                            Icons.store, 
+                            color: bar.isPartner ? Colors.orange[800] : Colors.grey,
+                            size: 30,
                           ),
                   ),
                   // -------------------------------------
-
                   title: Text(
                     bar.name,
                     style: const TextStyle(fontWeight: FontWeight.bold),

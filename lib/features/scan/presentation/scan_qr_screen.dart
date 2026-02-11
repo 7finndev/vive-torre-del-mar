@@ -17,6 +17,8 @@ class ScanQrScreen extends StatefulWidget {
 class _ScanQrScreenState extends State<ScanQrScreen> with WidgetsBindingObserver {
   late MobileScannerController controller;
   bool _isProcessing = false;
+  //Estado del flash:
+  bool _isFlashOn = false;
 
   @override
   void initState() {
@@ -245,12 +247,35 @@ class _ScanQrScreenState extends State<ScanQrScreen> with WidgetsBindingObserver
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Icons.flash_on),
-            onPressed: () => controller.toggleTorch(),
+            icon: Icon(
+              _isFlashOn ? Icons.flash_on : Icons.flash_off,
+              color: _isFlashOn ? Colors.yellow : Colors.white,
+            ),
+            tooltip: "Alternar Flash",
+            //onPressed: () => controller.toggleTorch(),
+            onPressed: () async {
+              try {
+                await controller.toggleTorch();
+                setState(() => _isFlashOn = !_isFlashOn);
+              } catch(e){
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Flash no disponible en este dispositivo.")),
+                );
+              }
+            },
           ),
+          //Boton cambiar camara
           IconButton(
-            icon: const Icon(Icons.cameraswitch),
-            onPressed: () => controller.switchCamera(),
+            icon: const Icon(Icons.cameraswitch, color: Colors.white),
+            tooltip: "Cambiar Cámara",
+            //onPressed: () => controller.switchCamera(),
+            onPressed: () {
+              try{
+                controller.switchCamera();
+              }catch(e){
+                debugPrint("Error cambiando cámara: $e");
+              }
+            },
           ),
         ],
       ),

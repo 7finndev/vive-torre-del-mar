@@ -318,17 +318,76 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-// 🔥 WIDGET ESCÁNER (Igual que antes, con recuadro)
-class _SimpleScannerPage extends StatelessWidget {
+// 🔥 WIDGET ESCÁNER CORREGIDO (COMPATIBLE CON NUEVAS VERSIONES)
+class _SimpleScannerPage extends StatefulWidget {
   const _SimpleScannerPage();
+
+  @override
+  State<_SimpleScannerPage> createState() => _SimpleScannerPageState();
+}
+
+class _SimpleScannerPageState extends State<_SimpleScannerPage> {
+  final MobileScannerController _cameraController = MobileScannerController();
+  
+  // Variable local para saber si hemos encendido el flash nosotros
+  bool _isFlashOn = false;
+
+  @override
+  void dispose() {
+    _cameraController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Escanear QR Usuario"), backgroundColor: Colors.black, foregroundColor: Colors.white),
+      appBar: AppBar(
+        title: const Text("Escanear QR Usuario"),
+        backgroundColor: Colors.black, 
+        foregroundColor: Colors.white,
+        actions: [
+          // 💡 BOTÓN DE FLASH (Controlado manualmente)
+          IconButton(
+            icon: Icon(
+              _isFlashOn ? Icons.flash_on : Icons.flash_off, 
+              color: _isFlashOn ? Colors.yellow : Colors.grey,
+            ),
+            tooltip: "Alternar Flash",
+            onPressed: () async {
+              try {
+                // Mandamos la orden a la cámara
+                await _cameraController.toggleTorch();
+                // Cambiamos el icono
+                setState(() {
+                  _isFlashOn = !_isFlashOn;
+                });
+              } catch (e) {
+                // Por si el dispositivo no tiene flash (ej. algunas tablets o Web)
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Flash no disponible en este dispositivo")),
+                );
+              }
+            },
+          ),
+          
+          // 🔄 BOTÓN DE CAMBIAR CÁMARA
+          IconButton(
+            icon: const Icon(Icons.cameraswitch, color: Colors.white),
+            tooltip: "Cambiar Cámara",
+            onPressed: () {
+              try {
+                 _cameraController.switchCamera();
+              } catch (e) {
+                 print("Error cambiando cámara: $e");
+              }
+            },
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           MobileScanner(
+            controller: _cameraController,
             onDetect: (capture) {
               final List<Barcode> barcodes = capture.barcodes;
               for (final barcode in barcodes) {
@@ -339,17 +398,29 @@ class _SimpleScannerPage extends StatelessWidget {
               }
             },
           ),
+          
           Container(
             decoration: ShapeDecoration(
-              shape: _ScannerOverlayShape(borderColor: Colors.blue, borderRadius: 10, borderLength: 30, borderWidth: 10, cutOutSize: 300),
+              shape: _ScannerOverlayShape(
+                borderColor: Colors.blue, 
+                borderRadius: 10, 
+                borderLength: 30, 
+                borderWidth: 10, 
+                cutOutSize: 300
+              ),
             ),
           ),
+          
           Positioned(
             bottom: 80, left: 0, right: 0,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 10),
               color: Colors.black54,
-              child: const Text("Encuadra el QR del usuario", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 16)),
+              child: const Text(
+                "Encuadra el QR del usuario", 
+                textAlign: TextAlign.center, 
+                style: TextStyle(color: Colors.white, fontSize: 16)
+              ),
             ),
           ),
         ],
@@ -357,7 +428,6 @@ class _SimpleScannerPage extends StatelessWidget {
     );
   }
 }
-
 // 🎨 CLASE DE DIBUJO DEL MARCO (La misma de antes)
 class _ScannerOverlayShape extends ShapeBorder {
   final Color borderColor;

@@ -4,19 +4,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:torre_del_mar_app/core/utils/image_helper.dart'; 
+import 'package:torre_del_mar_app/core/utils/image_helper.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/product_repository.dart';
 import 'package:torre_del_mar_app/features/home/data/models/product_model.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/admin/presentation/controllers/product_form_controller.dart';
-import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart' hide establishmentRepositoryProvider;
+import 'package:torre_del_mar_app/features/home/presentation/providers/home_providers.dart'
+    hide establishmentRepositoryProvider;
 import 'package:uuid/uuid.dart';
 
 // Lista constante de alérgenos
 const List<String> _commonAllergens = [
-  'Gluten', 'Lácteos', 'Huevo', 'Frutos Secos', 'Marisco', 'Pescado', 'Soja',
-  'Apio', 'Mostaza', 'Sulfitos', 'Altramuces', 'Moluscos', 'Otros',
+  'Gluten',
+  'Lácteos',
+  'Huevo',
+  'Frutos Secos',
+  'Marisco',
+  'Pescado',
+  'Soja',
+  'Apio',
+  'Mostaza',
+  'Sulfitos',
+  'Altramuces',
+  'Moluscos',
+  'Otros',
 ];
 
 final establishmentsListProvider =
@@ -44,13 +56,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
-  final _descController = TextEditingController(); 
+  final _descController = TextEditingController();
   final _ingredientsController = TextEditingController();
-  final _priceController = TextEditingController(text: '0.0'); 
+  final _priceController = TextEditingController(text: '0.0');
   final _imageUrlController = TextEditingController();
 
   // 🔥 1. AQUÍ ESTABA EL ERROR: FALTABA DECLARAR ESTA VARIABLE
-  bool _hasInitializedPrice = false; 
+  bool _hasInitializedPrice = false;
   // ---------------------------------------------------------
 
   bool _useImageUpload = true;
@@ -80,12 +92,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
       if (p.items.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref.read(productFormControllerProvider.notifier).loadInitialItems(p.items);
+          ref
+              .read(productFormControllerProvider.notifier)
+              .loadInitialItems(p.items);
         });
       }
     }
   }
-  
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -100,36 +114,39 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Widget build(BuildContext context) {
     final establishmentsAsync = ref.watch(establishmentsListProvider);
     final formState = ref.watch(productFormControllerProvider);
-    
+
     // Obtenemos el evento para saber el tipo (menú/tapa) y AHORA EL PRECIO BASE
     final eventAsync = ref.watch(eventDetailsProvider(widget.initialEventId));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.productToEdit != null ? 'Editar Producto' : 'Nuevo Producto'),
+        title: Text(
+          widget.productToEdit != null ? 'Editar Producto' : 'Nuevo Producto',
+        ),
       ),
       body: eventAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Center(child: Text("Error cargando evento: $e")),
         data: (event) {
-          
           // 🔥 2. LÓGICA CORREGIDA DE PRECIO AUTOMÁTICO 🔥
           // Si es un producto NUEVO y aún no hemos puesto el precio automático
           if (widget.productToEdit == null && !_hasInitializedPrice) {
-             WidgetsBinding.instance.addPostFrameCallback((_) {
-               // Usamos .basePrice porque así se llama en tu modelo EventModel
-               if (event.basePrice != null) {
-                 setState(() {
-                   _priceController.text = event.basePrice.toString();
-                   _hasInitializedPrice = true; // Marcamos como hecho para que no se repita
-                 });
-                 print("✅ Precio automático aplicado: ${event.basePrice}€");
-               }
-             });
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              // Usamos .basePrice porque así se llama en tu modelo EventModel
+              if (event.basePrice != null) {
+                setState(() {
+                  _priceController.text = event.basePrice.toString();
+                  _hasInitializedPrice =
+                      true; // Marcamos como hecho para que no se repita
+                });
+                print("✅ Precio automático aplicado: ${event.basePrice}€");
+              }
+            });
           }
           // ------------------------------------------------
 
-          final bool showMenuBuilder = event.type == 'menu' || formState.items.isNotEmpty;
+          final bool showMenuBuilder =
+              event.type == 'menu' || formState.items.isNotEmpty;
 
           return Padding(
             padding: const EdgeInsets.all(16.0),
@@ -139,7 +156,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 children: [
                   if (formState.isLoading) const LinearProgressIndicator(),
                   const SizedBox(height: 20),
-                  
+
                   // SELECTOR DE ESTABLECIMIENTO
                   establishmentsAsync.when(
                     loading: () => const LinearProgressIndicator(),
@@ -147,10 +164,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     data: (establishments) {
                       return DropdownSearch<EstablishmentModel>(
                         items: (filter, loadProps) {
-                           if (filter.isEmpty) return establishments;
-                           return establishments.where((element) => 
-                               element.name.toLowerCase().contains(filter.toLowerCase())
-                           ).toList();
+                          if (filter.isEmpty) return establishments;
+                          return establishments
+                              .where(
+                                (element) => element.name
+                                    .toLowerCase()
+                                    .contains(filter.toLowerCase()),
+                              )
+                              .toList();
                         },
                         compareFn: (item1, item2) => item1.id == item2.id,
                         itemAsString: (EstablishmentModel u) => u.name,
@@ -169,7 +190,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               hintText: "Buscar...",
                               prefixIcon: Icon(Icons.search),
                               border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                             ),
                           ),
                         ),
@@ -181,22 +205,28 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         selectedItem: _selectedEstablishmentId != null
                             ? establishments.firstWhere(
                                 (e) => e.id == _selectedEstablishmentId,
-                                orElse: () => establishments.first)
+                                orElse: () => establishments.first,
+                              )
                             : null,
                         validator: (item) {
-                          if (_selectedEstablishmentId == null && item == null) return "Requerido";
+                          if (_selectedEstablishmentId == null && item == null)
+                            return "Requerido";
                           return null;
                         },
                       );
                     },
                   ),
-                  
+
                   const SizedBox(height: 16),
 
                   // DATOS BÁSICOS
                   TextFormField(
                     controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Nombre Producto / Menú', border: OutlineInputBorder(), prefixIcon: Icon(Icons.fastfood)),
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre Producto / Menú',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.fastfood),
+                    ),
                     validator: (v) => v!.isEmpty ? 'Requerido' : null,
                   ),
                   const SizedBox(height: 16),
@@ -204,8 +234,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   // PRECIO
                   TextFormField(
                     controller: _priceController,
-                    decoration: const InputDecoration(labelText: 'Precio (€)', border: OutlineInputBorder(), suffixText: '€', prefixIcon: Icon(Icons.euro)),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Precio (€)',
+                      border: OutlineInputBorder(),
+                      suffixText: '€',
+                      prefixIcon: Icon(Icons.euro),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                   ),
 
                   const SizedBox(height: 24),
@@ -214,11 +251,25 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Foto Principal', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Foto Principal',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       Row(
                         children: [
-                          Text(_useImageUpload ? "Archivo" : "URL", style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-                          Switch(value: _useImageUpload, activeThumbColor: Colors.black, onChanged: (val) => setState(() => _useImageUpload = val)),
+                          Text(
+                            _useImageUpload ? "Archivo" : "URL",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          Switch(
+                            value: _useImageUpload,
+                            activeThumbColor: Colors.black,
+                            onChanged: (val) =>
+                                setState(() => _useImageUpload = val),
+                          ),
                         ],
                       ),
                     ],
@@ -226,7 +277,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   const SizedBox(height: 8),
 
                   if (_useImageUpload)
-                  /*
+                    /*
                     ImagePickerWidget(
                       bucketName: 'products',
                       initialUrl: _imageUrlController.text.isNotEmpty ? _imageUrlController.text : null,
@@ -241,27 +292,54 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         Container(
                           height: 200,
                           width: double.infinity,
-                          decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           child: _newImageBytes != null
-                            ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(_newImageBytes!, fit: BoxFit.cover))
-                            : (_imageUrlController.text.isNotEmpty
-                              ? Image.network(_imageUrlController.text, fit: BoxFit.cover)
-                              : const Icon(Icons.image, size: 50, color: Colors.grey)),
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.memory(
+                                    _newImageBytes!,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : (_imageUrlController.text.isNotEmpty
+                                    ? Image.network(
+                                        _imageUrlController.text,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : const Icon(
+                                        Icons.image,
+                                        size: 50,
+                                        color: Colors.grey,
+                                      )),
                         ),
+                        const SizedBox(height: 10),
                         TextButton.icon(
                           onPressed: _pickImage,
                           icon: const Icon(Icons.upload),
                           label: const Text("Seleccionar Foto"),
-                        )
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          "💡 Recomendado: Formato cuadrado (800x800 px). La app la optimizará automáticamente.",
+                          style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     )
                   else
                     TextFormField(
                       controller: _imageUrlController,
-                      decoration: const InputDecoration(labelText: "Pegar URL", border: OutlineInputBorder(), prefixIcon: Icon(Icons.link)),
+                      decoration: const InputDecoration(
+                        labelText: "Pegar URL",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.link),
+                      ),
                       onChanged: (val) => setState(() {}),
                     ),
-                  
+
                   const SizedBox(height: 24),
 
                   // SECCIÓN MENÚ
@@ -270,22 +348,45 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("PLATOS DEL MENÚ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text(
+                          "PLATOS DEL MENÚ",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         ElevatedButton.icon(
                           onPressed: () => _showAddDishDialog(context),
                           icon: const Icon(Icons.add, size: 18),
                           label: const Text("Añadir Plato"),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black87,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "💡 Recomendado: Formato cuadrado (800x800 px). Se optimizará a Calidad 75%.",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    
+
                     if (formState.items.isEmpty)
                       Container(
                         padding: const EdgeInsets.all(16),
                         color: Colors.orange.shade50,
-                        child: const Text("Menú vacío. Añade entrantes, principales, etc.", textAlign: TextAlign.center, style: TextStyle(color: Colors.orange)),
+                        child: const Text(
+                          "Menú vacío. Añade entrantes, principales, etc.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.orange),
+                        ),
                       )
                     else
                       ListView.builder(
@@ -298,15 +399,33 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: _getColorForCourse(item.courseType),
-                                child: Icon(_getIconForCourse(item.courseType), color: Colors.white, size: 16),
+                                backgroundColor: _getColorForCourse(
+                                  item.courseType,
+                                ),
+                                child: Icon(
+                                  _getIconForCourse(item.courseType),
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
                               ),
-                              title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              title: Text(
+                                item.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               subtitle: Text(item.courseType.toUpperCase()),
                               trailing: IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
                                 onPressed: () {
-                                  ref.read(productFormControllerProvider.notifier).removeMenuCourse(index);
+                                  ref
+                                      .read(
+                                        productFormControllerProvider.notifier,
+                                      )
+                                      .removeMenuCourse(index);
                                 },
                               ),
                             ),
@@ -317,14 +436,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     const SizedBox(height: 20),
                   ],
 
-
                   // Descripción e Ingredientes
                   TextFormField(
                     controller: _descController,
                     decoration: const InputDecoration(
-                      labelText: 'Descripción', 
+                      labelText: 'Descripción',
                       alignLabelWithHint: true,
-                      border: OutlineInputBorder(), 
+                      border: OutlineInputBorder(),
                       prefixIcon: Padding(
                         padding: EdgeInsets.only(bottom: 40),
                         child: Icon(Icons.description),
@@ -336,13 +454,20 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
                   TextFormField(
                     controller: _ingredientsController,
-                    decoration: const InputDecoration(labelText: 'Ingredientes', border: OutlineInputBorder(), prefixIcon: Icon(Icons.list)),
+                    decoration: const InputDecoration(
+                      labelText: 'Ingredientes',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.list),
+                    ),
                     maxLines: 3,
                   ),
                   const SizedBox(height: 24),
 
                   // Alérgenos
-                  const Text('Alérgenos', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Text(
+                    'Alérgenos',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8.0,
@@ -378,27 +503,36 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   ),
 
                   const SizedBox(height: 32),
-                  
+
                   // BOTÓN GUARDAR
                   SizedBox(
                     height: 50,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.save),
-                      label: Text(formState.isLoading ? 'GUARDANDO...' : 'GUARDAR PRODUCTO'),
+                      label: Text(
+                        formState.isLoading
+                            ? 'GUARDANDO...'
+                            : 'GUARDAR PRODUCTO',
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: formState.isLoading ? null : () => _saveProduct(context),
+                      onPressed: formState.isLoading
+                          ? null
+                          : () => _saveProduct(context),
                     ),
                   ),
-                  
+
                   if (formState.error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: Text("Error: ${formState.error}", style: const TextStyle(color: Colors.red)),
+                      child: Text(
+                        "Error: ${formState.error}",
+                        style: const TextStyle(color: Colors.red),
+                      ),
                     ),
-                  
+
                   const SizedBox(height: 30),
                 ],
               ),
@@ -417,7 +551,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       maxHeight: 800,
       quality: 75,
     );
-    if(bytes != null) {
+    if (bytes != null) {
       setState(() {
         _newImageBytes = bytes;
         _useImageUpload = true;
@@ -427,9 +561,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   Future<void> _saveProduct(BuildContext context) async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (_selectedEstablishmentId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Falta seleccionar el establecimiento')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Falta seleccionar el establecimiento'),
+        ),
+      );
       return;
     }
 
@@ -438,35 +576,47 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
     String currentUrl = _imageUrlController.text;
 
-    if(_useImageUpload && _newImageBytes != null) {
+    if (_useImageUpload && _newImageBytes != null) {
       //1.-Borrar antigua si existe
-      if(widget.productToEdit != null && widget.productToEdit!.imageUrl!.isNotEmpty){
-        await ref.read(productRepositoryProvider).deleteProductImage(widget.productToEdit!.imageUrl!);
+      if (widget.productToEdit != null &&
+          widget.productToEdit!.imageUrl!.isNotEmpty) {
+        await ref
+            .read(productRepositoryProvider)
+            .deleteProductImage(widget.productToEdit!.imageUrl!);
       }
 
       //2.-Subir nueva
       final fileName = 'tapa_${const Uuid().v4()}.jpg';
-      currentUrl = await ref.read(productRepositoryProvider).uploadProductImage(fileName, _newImageBytes!);
+      currentUrl = await ref
+          .read(productRepositoryProvider)
+          .uploadProductImage(fileName, _newImageBytes!);
     }
 
-    await ref.read(productFormControllerProvider.notifier).saveProduct(
-      id: widget.productToEdit?.id, 
-      name: _nameController.text,
-      description: _descController.text,
-      price: price,
-      establishmentId: _selectedEstablishmentId!,
-      eventId: widget.initialEventId,
-      //newImage: null, 
-      //currentImageUrl: currentUrl,//_imageUrlController.text,
-      finalImageUrl: currentUrl,
-      ingredients: _ingredientsController.text,
-      allergens: allergensString,
-    );
+    await ref
+        .read(productFormControllerProvider.notifier)
+        .saveProduct(
+          id: widget.productToEdit?.id,
+          name: _nameController.text,
+          description: _descController.text,
+          price: price,
+          establishmentId: _selectedEstablishmentId!,
+          eventId: widget.initialEventId,
+          //newImage: null,
+          //currentImageUrl: currentUrl,//_imageUrlController.text,
+          finalImageUrl: currentUrl,
+          ingredients: _ingredientsController.text,
+          allergens: allergensString,
+        );
 
     if (mounted) {
       final state = ref.read(productFormControllerProvider);
       if (state.isSuccess) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Producto guardado correctamente"), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Producto guardado correctamente"),
+            backgroundColor: Colors.green,
+          ),
+        );
         Navigator.pop(context, true);
       }
     }
@@ -475,10 +625,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   void _showAddDishDialog(BuildContext context) {
     String name = '';
     String description = '';
-    
+
     final currentItems = ref.read(productFormControllerProvider).items;
     final usedTypes = currentItems.map((e) => e.courseType).toList();
-    
+
     final allTypes = {
       'entrante': 'Entrante',
       'principal': 'Plato Principal',
@@ -497,61 +647,71 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       return;
     }
 
-    String courseType = availableTypes.first.key; 
+    String courseType = availableTypes.first.key;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Añadir Plato al Menú"),
-        content: SingleChildScrollView( 
+        content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
                 initialValue: courseType,
                 items: availableTypes.map((entry) {
-                  return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                  return DropdownMenuItem(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  );
                 }).toList(),
                 onChanged: (v) => courseType = v!,
                 decoration: const InputDecoration(labelText: "Tipo"),
               ),
               const SizedBox(height: 10),
-              
+
               TextField(
-                decoration: const InputDecoration(labelText: "Nombre del plato"),
+                decoration: const InputDecoration(
+                  labelText: "Nombre del plato",
+                ),
                 onChanged: (v) => name = v,
                 autofocus: true,
               ),
               const SizedBox(height: 10),
-              
+
               TextField(
                 decoration: const InputDecoration(
                   labelText: "Descripción (opcional)",
                   hintText: "Ej: Con salsa de almendras",
                   border: OutlineInputBorder(),
                 ),
-                maxLines: 3, 
-                minLines: 3, 
+                maxLines: 3,
+                minLines: 3,
                 onChanged: (v) => description = v,
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar"),
+          ),
           ElevatedButton(
             onPressed: () {
               if (name.isNotEmpty) {
-                ref.read(productFormControllerProvider.notifier).addMenuCourse(
-                  name: name,
-                  courseType: courseType,
-                  description: description,
-                );
+                ref
+                    .read(productFormControllerProvider.notifier)
+                    .addMenuCourse(
+                      name: name,
+                      courseType: courseType,
+                      description: description,
+                    );
                 Navigator.pop(ctx);
               }
             },
             child: const Text("Añadir"),
-          )
+          ),
         ],
       ),
     );
@@ -559,21 +719,31 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   Color _getColorForCourse(String type) {
     switch (type) {
-      case 'entrante': return Colors.green;
-      case 'principal': return Colors.orange;
-      case 'postre': return Colors.pink;
-      case 'bebida': return Colors.blue;
-      default: return Colors.grey;
+      case 'entrante':
+        return Colors.green;
+      case 'principal':
+        return Colors.orange;
+      case 'postre':
+        return Colors.pink;
+      case 'bebida':
+        return Colors.blue;
+      default:
+        return Colors.grey;
     }
   }
 
   IconData _getIconForCourse(String type) {
     switch (type) {
-      case 'entrante': return Icons.soup_kitchen;
-      case 'principal': return Icons.restaurant;
-      case 'postre': return Icons.icecream;
-      case 'bebida': return Icons.local_bar;
-      default: return Icons.fastfood;
+      case 'entrante':
+        return Icons.soup_kitchen;
+      case 'principal':
+        return Icons.restaurant;
+      case 'postre':
+        return Icons.icecream;
+      case 'bebida':
+        return Icons.local_bar;
+      default:
+        return Icons.fastfood;
     }
   }
 }

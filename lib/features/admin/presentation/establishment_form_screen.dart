@@ -89,7 +89,13 @@ class _EstablishmentFormScreenState
 
     setState(() => _isGeocoding = true);
 
-    final coords = await GeocodingHelper.getCoordinatesFromAddress(_addressController.text);
+    //Solucion: Damos contexto al geocodificador si el usuario no lo ha hecho
+    String query = _addressController.text.trim();
+    if(!query.toLowerCase().contains("málaga") && !query.toLowerCase().contains("españa")) {
+      query = "$query, Málaga, España";
+    }
+
+    final coords = await GeocodingHelper.getCoordinatesFromAddress(query);//_addressController.text);
 
     if (mounted) {
       setState(() => _isGeocoding = false);
@@ -450,6 +456,12 @@ class _EstablishmentFormScreenState
                       onPressed: _pickImage,
                       icon: const Icon(Icons.image),
                       label: const Text("Seleccionar Imagen"),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "💡 Recomendado: Formato horizontal (1024x768 px). Se optimizará a Calidad 80%.",
+                      style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 )

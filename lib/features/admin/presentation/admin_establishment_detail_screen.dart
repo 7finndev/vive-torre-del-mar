@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -56,46 +58,67 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. IMAGEN DE PORTADA (Con truco anti-caché)
+            // 1. IMAGEN DE PORTADA (Con Efecto "Cine" Difuminado)
             SizedBox(
-              height: 250,
+              height: 300,
               width: double.infinity,
               child: imageUrl != null
-                  ? Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      // Loading builder para que se vea bonito mientras refresca
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
-                                : null,
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // A. FONDO BORROSO (La misma imagen estirada y desenfocada)
+                        Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                        ),
+                        BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+                          child: Container(
+                            color: Colors.black.withOpacity(0.5), // Oscurece para destacar la principal
                           ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        //=>
-                        print("Error cargando imagen: $error");
-                        return const Center(
-                          child: Icon(
-                            Icons.broken_image,
-                            size: 50,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
+                        ),
+                        // B. IMAGEN PRINCIPAL (Nítida y contenida)
+                        Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain, 
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.broken_image, size: 50, color: Colors.white54),
+                                  SizedBox(height: 10),
+                                  Text("No se pudo cargar la imagen", style: TextStyle(color: Colors.white54)),
+                                ],
+                              )
+                            );
+                          },
+                        ),
+                      ],
                     )
                   : Container(
-                      color: Colors.orange.shade100,
+                      color: Colors.orange.shade50,
                       child: const Center(
-                        child: Icon(
-                          Icons.store,
-                          size: 60,
-                          color: Colors.orange,
-                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.store, size: 80, color: Colors.orange),
+                            SizedBox(height: 10),
+                            Text("Sin foto de portada", style: TextStyle(color: Colors.orange)),
+                          ],
+                        )
                       ),
                     ),
             ),
@@ -210,23 +233,38 @@ class AdminEstablishmentDetailScreen extends ConsumerWidget {
                         itemCount: products.length,
                         separatorBuilder: (_, __) => const Divider(),
                         itemBuilder: (context, index) {
-                          final prod = products[index];
+                          final prod = products[index]; 
+                          
                           return ListTile(
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: SizedBox(
-                                width: 50,
-                                height: 50,
+                            // 🔥 AQUÍ LE DAMOS ACCIÓN 🔥
+                            onTap: () {
+                              // Navegamos usando la ruta que ya tienes en app_router.dart
+                              context.push('/admin/products/detail', extra: prod);
+                            },
+                            // ---------------------------
+                            leading: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
                                 child: prod.imageUrl != null
                                     ? Image.network(
                                         prod.imageUrl!,
-                                        fit: BoxFit.cover,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_,__,___) => const Icon(Icons.broken_image, color: Colors.grey, size: 20),
                                       )
-                                    : const Icon(Icons.fastfood),
+                                    : const Icon(Icons.fastfood, color: Colors.orange),
                               ),
                             ),
-                            title: Text(prod.name),
+                            title: Text(prod.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                             subtitle: Text("${prod.price}€"),
+                            // Flechita a la derecha para indicar que se puede entrar
+                            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
                           );
                         },
                       );

@@ -55,7 +55,6 @@ class AdminEventsScreen extends ConsumerWidget {
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   
-                  // --- AQUÍ ESTÁ LA MAGIA VISUAL ---
                   // Usamos la función auxiliar para pintar el estado correctamente
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 4.0),
@@ -99,7 +98,7 @@ class AdminEventsScreen extends ConsumerWidget {
 
   // --- FUNCIONES AUXILIARES ---
 
-  // Convierte el String de estado en un Widget bonito
+  // Convierte el String de estado en un Widget 
   // Coincide con el mapa usado en event_form_screen.dart
   Widget _getStatusLabel(String statusRaw) {
     // Normalizamos a minúsculas y quitamos espacios por seguridad

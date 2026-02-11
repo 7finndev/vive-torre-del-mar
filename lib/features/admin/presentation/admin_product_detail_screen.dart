@@ -1,3 +1,4 @@
+import 'dart:ui'; // <--- IMPORTANTE PARA EL EFECTO CINE
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -64,17 +65,73 @@ class AdminProductDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // IMAGEN
+            // ========================================================
+            // 🔥 IMAGEN EFECTO CINE (Sin recortes, fondo desenfocado) 🔥
+            // ========================================================
             SizedBox(
               height: 300,
               width: double.infinity,
               child: imageUrl != null && imageUrl.isNotEmpty
-                  ? Image.network(imageUrl, fit: BoxFit.cover)
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // A. FONDO BORROSO
+                        Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover, // Llena el fondo
+                        ),
+                        BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+                          child: Container(
+                            color: Colors.black.withOpacity(0.5), // Oscurece para contraste
+                          ),
+                        ),
+                        // B. FOTO NÍTIDA CENTRAL
+                        Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain, // NO RECORTA
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.broken_image, size: 50, color: Colors.white54),
+                                  SizedBox(height: 10),
+                                  Text("Error al cargar la imagen", style: TextStyle(color: Colors.white54)),
+                                ],
+                              )
+                            );
+                          },
+                        ),
+                      ],
+                    )
                   : Container(
                       color: Colors.grey[200],
-                      child: const Center(child: Icon(Icons.fastfood, size: 80, color: Colors.grey)),
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.fastfood, size: 80, color: Colors.grey),
+                            SizedBox(height: 10),
+                            Text("Sin imagen del producto", style: TextStyle(color: Colors.grey)),
+                          ],
+                        )
+                      ),
                     ),
             ),
+            // ========================================================
 
             Padding(
               padding: const EdgeInsets.all(20.0),
@@ -133,7 +190,7 @@ class AdminProductDetailScreen extends ConsumerWidget {
                   const Divider(),
                   const SizedBox(height: 20),
 
-                  // 🔥 4. NUEVA SECCIÓN: ESTABLECIMIENTO ASOCIADO 🔥
+                  // 🔥 4. SECCIÓN: ESTABLECIMIENTO ASOCIADO 🔥
                   const Text("Ofrecido por:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blueGrey)),
                   const SizedBox(height: 10),
 
@@ -155,15 +212,24 @@ class AdminProductDetailScreen extends ConsumerWidget {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(12),
-                          leading: CircleAvatar(
-                            radius: 25,
-                            backgroundColor: Colors.blue.shade50,
-                            backgroundImage: establishment.coverImage != null 
-                              ? NetworkImage(establishment.coverImage!) 
-                              : null,
-                            child: establishment.coverImage == null 
-                              ? const Icon(Icons.store, color: Colors.blue) 
-                              : null,
+                          leading: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade300)
+                            ),
+                            child: establishment.coverImage != null 
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    establishment.coverImage!, 
+                                    fit: BoxFit.contain, // También arreglamos esta miniatura
+                                    errorBuilder: (_,__,___) => const Icon(Icons.broken_image, color: Colors.grey),
+                                  )
+                                )
+                              : const Icon(Icons.store, color: Colors.blue),
                           ),
                           title: Text(
                             establishment.name,
@@ -172,8 +238,7 @@ class AdminProductDetailScreen extends ConsumerWidget {
                           subtitle: Text("Ir a la ficha del socio >", style: TextStyle(color: Colors.blue[700])),
                           trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                           onTap: () {
-                            // 🔥 NAVEGAMOS AL DETALLE DEL ESTABLECIMIENTO
-                            // Usamos la ruta que ya tienes configurada para socios
+                            // NAVEGAMOS AL DETALLE DEL ESTABLECIMIENTO
                             context.push('/admin/socios/detail', extra: establishment);
                           },
                         ),
