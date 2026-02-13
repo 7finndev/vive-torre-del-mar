@@ -21,7 +21,8 @@ class DashboardStats {
 
   // --- CAMPOS TECNOLOGÍAS ---
   final int deviceAndroid;
-  final int deviceIOS; // Nota: Mantengo el nombre que tenías para no romper la UI
+  final int deviceIOS;
+  final int deviceDesktop; // <--- ¡NUEVO CAMPO!
   final int deviceWeb;
 
   DashboardStats({
@@ -34,6 +35,7 @@ class DashboardStats {
     required this.countShopping,
     required this.deviceAndroid,
     required this.deviceIOS,
+    required this.deviceDesktop, // <--- AÑADIDO
     required this.deviceWeb,
     required this.languages,
   });
@@ -45,7 +47,6 @@ class DashboardRepository {
 
   Future<DashboardStats> getStats({int? eventId}) async {
     // 1. USUARIOS (Global)
-    // Nota: Profiles suele ser una tabla protegida, asegúrate de tener política SELECT
     final usersCount = await _client.from('profiles').count(CountOption.exact);
 
     // 2. PRODUCTOS Y CATEGORÍAS
@@ -77,7 +78,6 @@ class DashboardRepository {
             type.contains('comercio')) {
           shopping++;
         } else {
-           // Por defecto si no cuadra nada
            products++;
         }
       }
@@ -85,24 +85,41 @@ class DashboardRepository {
 
     final totalProducts = products + drinks + shopping;
 
-    // 3. ESTABLECIMIENTOS (SOCIOS)
+    // 3. ESTABLECIMIENTOS
     int establishmentsCount = 0;
+    
     if (eventId != null) {
       try {
-        establishmentsCount = await _client
-            .from('event_establishments')
-            .count(CountOption.exact)
+        // Consultamos la vista que me has confirmado que tiene datos
+        final List<dynamic> data = await _client
+            .from('event_establishments_view')
+            .select('id') // Solo traemos el ID para gastar pocos datos
             .eq('event_id', eventId);
-      } catch (_) {
+
+        // Usamos un Set para asegurar que son ÚNICOS
+        // (Por si la vista devuelve varias filas para el mismo bar)
+        final uniqueIds = data.map((e) => e['id']).toSet();
+        
+        establishmentsCount = uniqueIds.length;
+        
+        print("✅ Socios (Vista): ${data.length} filas -> $establishmentsCount únicos");
+        
+      } catch (e) {
+        print("❌ Error leyendo la vista de establecimientos: $e");
         establishmentsCount = 0;
       }
     } else {
-      establishmentsCount = await _client
-          .from('establishments')
-          .count(CountOption.exact);
+      // Global (Sin filtro)
+      try {
+        establishmentsCount = await _client
+            .from('establishments')
+            .count(CountOption.exact);
+      } catch (_) {
+        establishmentsCount = 0;
+      }
     }
 
-    // 4. ESCANEOS / VISITAS
+    // 4. ESCANEOS
     int scansCount = 0;
     try {
       var scansQuery = _client.from('passport_entries').count(CountOption.exact);
@@ -112,26 +129,27 @@ class DashboardRepository {
       scansCount = 0;
     }
 
-    // 5. CONSULTA DE DISPOSITIVOS (OPTIMIZADA 🔥)
-    // Traemos OS y Locale de una sola vez para ahorrar peticiones
+    // 5. CONSULTA DE DISPOSITIVOS (LÓGICA ACTUALIZADA 🔥)
     Map<String, int> langMap = {};
-    int android = 0, ios = 0, web = 0;
+    int android = 0, ios = 0, web = 0, desktop = 0;
 
     try {
       final List<dynamic> analyticsData = await _client
           .from('analytics_devices')
-          .select('os, locale'); // Seleccionamos solo lo necesario
+          .select('os, locale'); 
 
       for (var item in analyticsData) {
-        // A. Contar OS (Normalizando a minúsculas)
+        // A. Contar OS
         final String os = (item['os'] ?? '').toString().toLowerCase().trim();
 
         if (os == 'android') {
           android++;
         } else if (os == 'ios') {
           ios++;
-        } else if (os == 'web') {
-          web++;
+        } else if (os == 'windows' || os == 'macos' || os == 'linux') {
+          desktop++; // <--- AGRUPAMOS ORDENADORES
+        } else {
+          web++; // Resto (web generica, etc.)
         }
 
         // B. Contar Idiomas
@@ -153,7 +171,8 @@ class DashboardRepository {
       countDrinks: drinks,
       countShopping: shopping,
       deviceAndroid: android,
-      deviceIOS: ios, // Mapeamos la variable local 'ios' al campo 'deviceIOS'
+      deviceIOS: ios,
+      deviceDesktop: desktop, // <--- PASAMOS EL VALOR
       deviceWeb: web,
       languages: langMap,
     );

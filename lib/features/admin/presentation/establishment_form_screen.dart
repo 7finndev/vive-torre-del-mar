@@ -8,7 +8,6 @@ import 'package:torre_del_mar_app/core/utils/image_helper.dart';
 import 'package:uuid/uuid.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 import 'package:torre_del_mar_app/features/home/data/repositories/establishment_repository.dart';
-// IMPORTAMOS EL NUEVO HELPER
 import 'package:torre_del_mar_app/core/utils/geocoding_helper.dart';
 
 class EstablishmentFormScreen extends ConsumerStatefulWidget {
@@ -24,28 +23,33 @@ class _EstablishmentFormScreenState
     extends ConsumerState<EstablishmentFormScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-  bool _isGeocoding = false; // Para el spinner del botón GPS
+  bool _isGeocoding = false;
 
-  // Controladores
+  // Controladores Generales
   final _nameController = TextEditingController();
   final _addressController = TextEditingController();
   final _descController = TextEditingController();
-  final _ownerController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _webCtrl = TextEditingController();
+  final _phoneController = TextEditingController(); // Teléfono Público
   final _scheduleController = TextEditingController();
   final _imageController = TextEditingController();
+
+  // Controladores Gerencia (NUEVOS)
+  final _ownerController = TextEditingController(); // Nombre Gerente
+  final _ownerPhoneController = TextEditingController(); // Teléfono Gerente
+  final _ownerEmailController = TextEditingController(); // Email Gerente
+
+  // Controladores Redes Sociales
+  final _webCtrl = TextEditingController();
   final _facebookCtrl = TextEditingController();
   final _instagramCtrl = TextEditingController();
   final _tiktokCtrl = TextEditingController();
 
-  // NUEVOS CONTROLADORES GPS
+  // GPS
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
+  final MapController _mapController = MapController();
 
-  final MapController _mapController = MapController(); // <--- NUEVO
-
-  // CONTROLADOR PARA PIN CAMARERO O ESTABLECIMIENTO:
+  // PIN
   final _pinController = TextEditingController();
   
   bool _isPartner = true;
@@ -62,62 +66,81 @@ class _EstablishmentFormScreenState
       _nameController.text = e.name;
       _addressController.text = e.address ?? '';
       _descController.text = e.description ?? '';
-      _ownerController.text = e.ownerName ?? '';
-      _phoneController.text = e.phone ?? '';
+      _phoneController.text = e.phone ?? ''; // Público
       _scheduleController.text = e.schedule ?? '';
+      _imageController.text = e.coverImage ?? '';
+      
+      // Gerencia
+      _ownerController.text = e.ownerName ?? '';
+      _ownerPhoneController.text = e.ownerPhone ?? ''; // Privado
+      _ownerEmailController.text = e.ownerEmail ?? ''; // Privado
+
+      // Redes
       _webCtrl.text = e.website ?? '';
       _facebookCtrl.text = e.facebook ?? '';
       _instagramCtrl.text = e.instagram ?? '';
       _tiktokCtrl.text = e.socialTiktok ?? '';
-      _imageController.text = e.coverImage ?? '';
+
       _isPartner = e.isPartner;
       _isActive = e.isActive;
       _pinController.text = e.waiterPin ?? '';
 
-      // CARGAR GPS SI EXISTE
       if (e.latitude != null) _latController.text = e.latitude.toString();
       if (e.longitude != null) _lngController.text = e.longitude.toString();
     }
   }
 
-  // FUNCIÓN PARA BUSCAR GPS AUTOMÁTICO
+  @override
+  void dispose() {
+    // Limpieza de controladores
+    _nameController.dispose();
+    _addressController.dispose();
+    _descController.dispose();
+    _phoneController.dispose();
+    _scheduleController.dispose();
+    _imageController.dispose();
+    _ownerController.dispose();
+    _ownerPhoneController.dispose();
+    _ownerEmailController.dispose();
+    _webCtrl.dispose();
+    _facebookCtrl.dispose();
+    _instagramCtrl.dispose();
+    _tiktokCtrl.dispose();
+    _pinController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
+    super.dispose();
+  }
+
   Future<void> _findCoordinates() async {
     if (_addressController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Escribe una dirección primero")));
       return;
     }
-
     setState(() => _isGeocoding = true);
 
-    //Solucion: Damos contexto al geocodificador si el usuario no lo ha hecho
     String query = _addressController.text.trim();
     if(!query.toLowerCase().contains("málaga") && !query.toLowerCase().contains("españa")) {
       query = "$query, Málaga, España";
     }
 
-    final coords = await GeocodingHelper.getCoordinatesFromAddress(query);//_addressController.text);
+    final coords = await GeocodingHelper.getCoordinatesFromAddress(query);
 
     if (mounted) {
       setState(() => _isGeocoding = false);
-      
       if (coords != null) {
         final lat = coords[0];
         final lng = coords[1];
-
         _latController.text = lat.toString();
         _lngController.text = lng.toString();
-        
-        // 🚀 MOVEMOS EL MAPA AL NUEVO PUNTO
         _mapController.move(LatLng(lat, lng), 17.0);
-
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("📍 ¡Ubicación encontrada!"), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("📍 Ubicación encontrada"), backgroundColor: Colors.green));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ No encontrada. Intenta simplificar la dirección.")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ No encontrada.")));
       }
     }
   }
 
-  //Modificación para usar Helper:
   Future<void> _pickImage() async {
     final bytes = await ImageHelper.pickAndCompress(
       source: ImageSource.gallery,
@@ -125,49 +148,65 @@ class _EstablishmentFormScreenState
       maxHeight: 768,
       quality: 80,
     );
-    
-    /*
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      final bytes = await image.readAsBytes();
-      setState(() {
-        _selectedImageBytes = bytes;
-      });
-    }
-    */
     if (bytes != null) {
-      setState(() {
-        _selectedImageBytes = bytes;
-      });
+      setState(() => _selectedImageBytes = bytes);
     }
+  }
+
+  // WIDGET AUXILIAR PARA INPUTS CON ICONO
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType type = TextInputType.text,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: type,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.grey),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.establishmentToEdit != null ? "Editar Socio" : "Nuevo Socio",
-        ),
+        title: Text(widget.establishmentToEdit != null ? "Editar Socio" : "Nuevo Socio"),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // --- DATOS BÁSICOS ---
+              const Text("🏢 Datos del Establecimiento", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 15),
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: "Nombre Comercial *",
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: "Nombre Comercial *", border: OutlineInputBorder()),
                 validator: (v) => v!.isEmpty ? 'Requerido' : null,
               ),
               const SizedBox(height: 15),
+              _buildTextField(controller: _phoneController, label: "Teléfono Público (Reservas)", icon: Icons.phone, type: TextInputType.phone),
+              const SizedBox(height: 15),
+              TextFormField(
+                controller: _descController,
+                decoration: const InputDecoration(labelText: "Descripción", border: OutlineInputBorder()),
+                maxLines: 3,
+              ),
 
-              // --- SECCIÓN DIRECCIÓN Y GPS ---
+              const SizedBox(height: 25),
+              
+              // --- DIRECCIÓN Y MAPA ---
+              const Text("📍 Ubicación", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 15),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -175,85 +214,47 @@ class _EstablishmentFormScreenState
                     flex: 2,
                     child: TextFormField(
                       controller: _addressController,
-                      decoration: const InputDecoration(
-                        labelText: "Dirección",
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.location_on),
-                      ),
+                      decoration: const InputDecoration(labelText: "Dirección", border: OutlineInputBorder(), prefixIcon: Icon(Icons.location_on)),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     flex: 1,
                     child: SizedBox(
-                      height: 58, // Altura para igualar al input
+                      height: 56,
                       child: ElevatedButton(
                         onPressed: _isGeocoding ? null : _findCoordinates,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade50,
-                          foregroundColor: Colors.blue.shade900,
-                          padding: EdgeInsets.zero,
-                        ),
-                        child: _isGeocoding
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.search_outlined),
-                                  Text(
-                                    "Buscar GPS",
-                                    style: TextStyle(fontSize: 10),
-                                  ),
-                                ],
-                              ),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade50, padding: EdgeInsets.zero),
+                        child: _isGeocoding 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                          : const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.search), Text("GPS", style: TextStyle(fontSize: 10))]),
                       ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              // COORDENADAS MANUALES
-              // ... (Después del botón buscar GPS y las casillas de texto lat/long) ...
-
-              const SizedBox(height: 10),
-              // COORDENADAS MANUALES
               Row(
                 children: [
-                  Expanded(child: TextFormField(controller: _latController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Latitud", hintText: "36.7...", isDense: true, border: OutlineInputBorder()))),
+                  Expanded(child: _buildTextField(controller: _latController, label: "Latitud", icon: Icons.north, type: TextInputType.number)),
                   const SizedBox(width: 10),
-                  Expanded(child: TextFormField(controller: _lngController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Longitud", hintText: "-4.1...", isDense: true, border: OutlineInputBorder()))),
+                  Expanded(child: _buildTextField(controller: _lngController, label: "Longitud", icon: Icons.east, type: TextInputType.number)),
                 ],
               ),
-              
               const SizedBox(height: 10),
-
-              // ========================================================
-              // 🗺️ MAPA INTERACTIVO (OPENSTREETMAP)
-              // ========================================================
               Container(
-                height: 300,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                height: 250,
+                decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(10)),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      // Centro inicial: Torre del Mar (o la latitud guardada)
                       initialCenter: _latController.text.isNotEmpty 
                           ? LatLng(double.parse(_latController.text), double.parse(_lngController.text))
                           : const LatLng(36.741, -4.093), 
                       initialZoom: 15.0,
-                      onTap: (tapPosition, point) {
-                        // AL TOCAR EL MAPA, ACTUALIZAMOS LAS CASILLAS
+                      onTap: (_, point) {
                         setState(() {
                           _latController.text = point.latitude.toStringAsFixed(6);
                           _lngController.text = point.longitude.toStringAsFixed(6);
@@ -261,21 +262,13 @@ class _EstablishmentFormScreenState
                       },
                     ),
                     children: [
-                      TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.torredelmar.admin',
-                      ),
-                      // MARCADOR QUE SIGUE AL CLIC
+                      TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.torredelmar.admin'),
                       MarkerLayer(
                         markers: [
-                          if (_latController.text.isNotEmpty && _lngController.text.isNotEmpty)
+                          if (_latController.text.isNotEmpty)
                             Marker(
-                              point: LatLng(
-                                double.tryParse(_latController.text) ?? 36.74, 
-                                double.tryParse(_lngController.text) ?? -4.09
-                              ),
-                              width: 40,
-                              height: 40,
+                              point: LatLng(double.tryParse(_latController.text) ?? 0, double.tryParse(_lngController.text) ?? 0),
+                              width: 40, height: 40,
                               child: const Icon(Icons.location_on, color: Colors.red, size: 40),
                             ),
                         ],
@@ -284,51 +277,49 @@ class _EstablishmentFormScreenState
                   ),
                 ),
               ),
-              const SizedBox(height: 5),
-              const Text("👆 Toca en el mapa para ajustar la posición exacta", style: TextStyle(fontSize: 12, color: Colors.grey)),
-              // ========================================================
 
-              // -----------------------------
+              const SizedBox(height: 30),
+
+              // --- REDES SOCIALES ---
+              const Text("🌍 Redes Sociales", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 15),
-              TextFormField(
-                controller: _ownerController,
-                decoration: const InputDecoration(
-                  labelText: "Nombre Propietario",
-                  border: OutlineInputBorder(),
-                ),
+              _buildTextField(controller: _webCtrl, label: "Web Oficial", icon: Icons.language),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _buildTextField(controller: _facebookCtrl, label: "Facebook", icon: Icons.facebook)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildTextField(controller: _instagramCtrl, label: "Instagram", icon: Icons.camera_alt)),
+                ],
               ),
+              const SizedBox(height: 10),
+              _buildTextField(controller: _tiktokCtrl, label: "TikTok (URL)", icon: Icons.music_note),
+
+              const SizedBox(height: 30),
+
+              // --- DATOS GERENCIA ---
+              const Text("👨‍💼 Datos Privados (Gerencia)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 15),
-              TextFormField(
-                controller: _descController,
-                decoration: const InputDecoration(
-                  labelText: "Descripción",
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 15),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(
-                  labelText: "Teléfono",
-                  border: OutlineInputBorder(),
-                ),
+              _buildTextField(controller: _ownerController, label: "Nombre Gerente", icon: Icons.person),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _buildTextField(controller: _ownerPhoneController, label: "Móvil Gerente", icon: Icons.phone_iphone, type: TextInputType.phone)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildTextField(controller: _ownerEmailController, label: "Email Gerente", icon: Icons.email, type: TextInputType.emailAddress)),
+                ],
               ),
 
-              const SizedBox(height: 25),
+              const SizedBox(height: 30),
 
-              // SEGURIDAD (PIN):
+              // --- SEGURIDAD (PIN) ---
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
+                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Seguridad (Anti-Trampas)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                    const Text("🛡️ Seguridad (PIN Camarero)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                     const SizedBox(height: 10),
                     Row(
                       children: [
@@ -338,144 +329,60 @@ class _EstablishmentFormScreenState
                             maxLength: 4,
                             keyboardType: TextInputType.number,
                             decoration: InputDecoration(
-                              labelText: "PIN Camarero",
-                              hintText: "Ej: 1234",
+                              labelText: "PIN (4 dígitos)",
                               filled: true,
                               fillColor: Colors.white,
                               border: const OutlineInputBorder(),
-                              counterText: "", //Oculta el contador 0/4
+                              counterText: "",
                               suffixIcon: IconButton(
-                                icon: const Icon(Icons.casino, color: Colors.orange),
-                                tooltip: "Generar Aleatorio",
+                                icon: const Icon(Icons.refresh, color: Colors.orange),
                                 onPressed: () {
-                                  //Generar PIN aleatorio entre 1000 y 9999
                                   final randomPin = (1000 + DateTime.now().millisecondsSinceEpoch % 9000).toString();
-                                  setState(() {
-                                    _pinController.text = randomPin;
-                                  });
+                                  setState(() => _pinController.text = randomPin);
                                 },
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 15),
-                        const Expanded(
-                          child: Text(
-                            "Código de 4 dígitos para validar manualmente si falla el escáner QR y/o GPS. El personal debe conocerlo.",
-                            style: TextStyle(fontSize: 12, color: Colors.black87),
-                          ),
-                        ),
+                        const Expanded(child: Text("Código manual para validar votos cuando falla el GPS.", style: TextStyle(fontSize: 12))),
                       ],
-
                     ),
                   ],
-
                 ),
-
               ),
-              
-              const SizedBox(height: 25),
 
+              const SizedBox(height: 30),
+
+              // --- IMAGEN ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Foto de Portada',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Switch(
-                    value: _useImageUpload,
-                    onChanged: (v) => setState(() => _useImageUpload = v),
-                  ),
+                  const Text('Foto de Portada', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Switch(value: _useImageUpload, onChanged: (v) => setState(() => _useImageUpload = v)),
                 ],
               ),
-
               if (_useImageUpload)
                 Column(
                   children: [
                     Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade400),
-                      ),
-                      // LÓGICA MEJORADA DE IMAGEN
+                      height: 200, width: double.infinity,
+                      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10)),
                       child: _selectedImageBytes != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.memory(
-                                _selectedImageBytes!,
-                                fit: BoxFit.cover,
-                              ),
-                            )
+                          ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(_selectedImageBytes!, fit: BoxFit.cover))
                           : (_imageController.text.isNotEmpty
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Image.network(
-                                      _imageController.text,
-                                      fit: BoxFit.cover,
-                                      // ESTO EVITA QUE LA APP PETE SI LA IMAGEN FALLA
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(
-                                              Icons.broken_image,
-                                              size: 40,
-                                              color: Colors.red,
-                                            ),
-                                            const SizedBox(height: 5),
-                                            const Text(
-                                              "No se puede cargar la imagen externa",
-                                              style: TextStyle(fontSize: 10),
-                                            ),
-                                            TextButton(
-                                              onPressed: () {},
-                                              child: const Text(
-                                                "(Sube una nueva)",
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  )
-                                : const Center(
-                                    child: Icon(
-                                      Icons.add_a_photo,
-                                      size: 50,
-                                      color: Colors.grey,
-                                    ),
-                                  )),
+                                ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(_imageController.text, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.broken_image)))
+                                : const Icon(Icons.add_a_photo, size: 50, color: Colors.grey)),
                     ),
-                    const SizedBox(height: 10),
-                    ElevatedButton.icon(
-                      onPressed: _pickImage,
-                      icon: const Icon(Icons.image),
-                      label: const Text("Seleccionar Imagen"),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "💡 Recomendado: Formato horizontal (1024x768 px). Se optimizará a Calidad 80%.",
-                      style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
-                      textAlign: TextAlign.center,
-                    ),
+                    TextButton.icon(onPressed: _pickImage, icon: const Icon(Icons.image), label: const Text("Seleccionar Imagen")),
                   ],
                 )
               else
-                TextFormField(
-                  controller: _imageController,
-                  decoration: const InputDecoration(
-                    labelText: "URL Manual",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                TextFormField(controller: _imageController, decoration: const InputDecoration(labelText: "URL Manual", border: OutlineInputBorder())),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 40),
 
+              // BOTÓN GUARDAR
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -483,12 +390,10 @@ class _EstablishmentFormScreenState
                   onPressed: _isLoading ? null : _save,
                   icon: const Icon(Icons.save),
                   label: Text(_isLoading ? "GUARDANDO..." : "GUARDAR DATOS"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white),
                 ),
               ),
+              const SizedBox(height: 50),
             ],
           ),
         ),
@@ -502,54 +407,42 @@ class _EstablishmentFormScreenState
 
     try {
       final repo = ref.read(establishmentRepositoryProvider);
-      String? finalImageUrl = _imageController.text.isNotEmpty
-          ? _imageController.text
-          : null;
+      String? finalImageUrl = _imageController.text.isNotEmpty ? _imageController.text : null;
 
       if (_useImageUpload && _selectedImageBytes != null) {
-        //Limpieza: Si editamos y hay foto vieja, borramos:
         if(widget.establishmentToEdit != null && widget.establishmentToEdit!.coverImage != null){
           await repo.deleteEstablishmentImage(widget.establishmentToEdit!.coverImage!);
         }
-
-        //Subida:
-        
         final fileName = '${const Uuid().v4()}.jpg';
-        finalImageUrl = await repo.uploadEstablishmentImage(
-          fileName,
-          _selectedImageBytes!,
-        );
+        finalImageUrl = await repo.uploadEstablishmentImage(fileName, _selectedImageBytes!);
       }
 
-      // CONVERSIÓN DE COORDENADAS
-      // Reemplazamos coma por punto por si el teclado está en español
       double? lat;
       double? lng;
-      if (_latController.text.isNotEmpty) {
-        lat = double.tryParse(_latController.text.replaceAll(',', '.'));
-      }
-      if (_lngController.text.isNotEmpty) {
-        lng = double.tryParse(_lngController.text.replaceAll(',', '.'));
-      }
+      if (_latController.text.isNotEmpty) lat = double.tryParse(_latController.text.replaceAll(',', '.'));
+      if (_lngController.text.isNotEmpty) lng = double.tryParse(_lngController.text.replaceAll(',', '.'));
 
       final establishment = EstablishmentModel(
         id: widget.establishmentToEdit?.id ?? 0,
         name: _nameController.text,
         address: _addressController.text,
         description: _descController.text,
-        ownerName: _ownerController.text,
-        phone: _phoneController.text,
-        website: _webCtrl.text,
+        phone: _phoneController.text, // Público
         schedule: _scheduleController.text,
         coverImage: finalImageUrl,
         isPartner: _isPartner,
         isActive: _isActive,
         qrUuid: widget.establishmentToEdit?.qrUuid ?? const Uuid().v4(),
-        // AQUI METEMOS LAS COORDENADAS NUEVAS
         latitude: lat,
         longitude: lng,
-        // -----------------------------------
-        // AQUI VA EL CAMPO PIN
+        // CAMPOS NUEVOS
+        ownerName: _ownerController.text,
+        ownerPhone: _ownerPhoneController.text, // Privado
+        ownerEmail: _ownerEmailController.text, // Privado
+        website: _webCtrl.text,
+        facebook: _facebookCtrl.text,
+        instagram: _instagramCtrl.text,
+        socialTiktok: _tiktokCtrl.text,
         waiterPin: _pinController.text.trim().isEmpty ? null : _pinController.text.trim(),
       );
 
@@ -561,16 +454,10 @@ class _EstablishmentFormScreenState
 
       if (mounted) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Guardado correctamente")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Guardado correctamente")));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

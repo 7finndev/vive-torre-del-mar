@@ -3,11 +3,12 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // <--- IMPORTANTE
+import 'package:torre_del_mar_app/core/constants/app_data.dart';
 import 'package:torre_del_mar_app/features/home/data/models/establishment_model.dart';
 
 class ScanQrScreen extends StatefulWidget {
   final EstablishmentModel establishment;
-
+  
   const ScanQrScreen({super.key, required this.establishment});
 
   @override
@@ -84,8 +85,9 @@ class _ScanQrScreenState extends State<ScanQrScreen> with WidgetsBindingObserver
 
         debugPrint("Distancia GPS: $distanceInMeters m");
 
-        // Margen de 300 metros
-        if (distanceInMeters > 300) {
+        // Aqui se establece el margen de distancia que debe estar el usuario con respecto al establecimiento
+        // para realizar una votación de manera correcta. Distancia entre 100 y 300 metros, es lo adecuado.
+        if (distanceInMeters > AppData.maxQrDistance) {
           _showErrorAndRestart(
             "Demasiado lejos 🏃‍♂️",
             "Estás a ${distanceInMeters.toInt()}m del local.\nAcércate más.",

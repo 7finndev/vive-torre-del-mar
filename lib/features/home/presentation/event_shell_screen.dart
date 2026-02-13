@@ -27,17 +27,25 @@ class EventShellScreen extends ConsumerWidget {
       }
     });
 
-    // 2. Lógica Visual (Colores e Iconos)
+    // 2. Lógica Visual (BRANDING REAL) 🎨
     final eventAsync = ref.watch(currentEventProvider);
+    
+    // Valores por defecto
     String productLabel = "Tapas";
     IconData productIcon = Icons.local_dining_outlined;
     IconData productIconSelected = Icons.local_dining;
-    Color themeColor = Colors.orange;
+    
+    // COLORES POR DEFECTO
+    Color themeColor = Colors.orange; // Color Principal (Seleccionado)
+    Color bgColor = Colors.white;     // Color Fondo Pantalla
+    Color navColor = Colors.white;    // Color Barra Navegación
+    Color textColor = Colors.black;   // Color Iconos inactivos / Texto
 
     if (eventAsync.hasValue && eventAsync.value != null) {
       final event = eventAsync.value!;
       final type = event.type;
       
+      // Iconos según tipo
       if (type == 'menu') {
         productLabel = "Menús";
         productIcon = Icons.restaurant_menu_outlined;
@@ -52,9 +60,23 @@ class EventShellScreen extends ConsumerWidget {
         productIconSelected = Icons.shopping_bag;
       }
 
+      // PARSEO DE COLORES (Protegido contra errores)
       try {
-         themeColor = Color(int.parse(event.themeColorHex.replaceAll('#', '0xff')));
-       } catch (_) {}
+         if (event.themeColorHex.isNotEmpty) {
+           themeColor = Color(int.parse(event.themeColorHex.replaceAll('#', '0xff')));
+         }
+         if (event.bgColorHex != null && event.bgColorHex!.isNotEmpty) {
+           bgColor = Color(int.parse(event.bgColorHex!.replaceAll('#', '0xff')));
+         }
+         if (event.navColorHex != null && event.navColorHex!.isNotEmpty) {
+           navColor = Color(int.parse(event.navColorHex!.replaceAll('#', '0xff')));
+         }
+         if (event.textColorHex != null && event.textColorHex!.isNotEmpty) {
+           textColor = Color(int.parse(event.textColorHex!.replaceAll('#', '0xff')));
+         }
+       } catch (_) {
+         // Si falla algún color, mantenemos los defaults
+       }
     }
 
     // 3. Responsive
@@ -62,16 +84,42 @@ class EventShellScreen extends ConsumerWidget {
     final height = MediaQuery.of(context).size.height;
     final bool isDesktop = width > 900;
 
-    // Destinos
+    // DEFINIMOS LOS DESTINOS APLICANDO LOS COLORES DIRECTAMENTE AQUI
+    // Así evitamos el error de intentar acceder a .icon más tarde
     final destinations = [
-      const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Inicio'),
-      const NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: 'Mapa'),
-      const NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Locales'),
-      NavigationDestination(icon: Icon(productIcon), selectedIcon: Icon(productIconSelected), label: productLabel),
-      const NavigationDestination(icon: Icon(Icons.emoji_events_outlined), selectedIcon: Icon(Icons.emoji_events), label: 'Ranking'),
-      const NavigationDestination(icon: Icon(Icons.verified_outlined), selectedIcon: Icon(Icons.verified), label: 'Pasaporte'),
+      NavigationDestination(
+        icon: Icon(Icons.home_outlined, color: textColor.withOpacity(0.6)), // Color inactivo
+        selectedIcon: Icon(Icons.home, color: themeColor), // Color activo
+        label: 'Inicio'
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.map_outlined, color: textColor.withOpacity(0.6)),
+        selectedIcon: Icon(Icons.map, color: themeColor),
+        label: 'Mapa'
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.storefront_outlined, color: textColor.withOpacity(0.6)),
+        selectedIcon: Icon(Icons.storefront, color: themeColor),
+        label: 'Locales'
+      ),
+      NavigationDestination(
+        icon: Icon(productIcon, color: textColor.withOpacity(0.6)),
+        selectedIcon: Icon(productIconSelected, color: themeColor),
+        label: productLabel
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.emoji_events_outlined, color: textColor.withOpacity(0.6)),
+        selectedIcon: Icon(Icons.emoji_events, color: themeColor),
+        label: 'Ranking'
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.verified_outlined, color: textColor.withOpacity(0.6)),
+        selectedIcon: Icon(Icons.verified, color: themeColor),
+        label: 'Pasaporte'
+      ),
     ];
 
+    // Para la versión Desktop (Rail), usamos una conversión simple
     final railDestinations = destinations.map((d) => NavigationRailDestination(
       icon: d.icon, 
       selectedIcon: d.selectedIcon, 
@@ -90,29 +138,31 @@ class EventShellScreen extends ConsumerWidget {
         }
       },
       child: Scaffold(
+        backgroundColor: bgColor, // <--- AQUI APLICAMOS EL COLOR DE FONDO
+        
         body: isDesktop
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- BARRA LATERAL (Solo Navegación + Botón Atrás) ---
                   SingleChildScrollView(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minHeight: height),
                       child: IntrinsicHeight(
                         child: NavigationRail(
+                          backgroundColor: navColor, // <--- COLOR BARRA LATERAL
                           selectedIndex: navigationShell.currentIndex,
                           onDestinationSelected: (index) => _onTap(context, navigationShell, index),
                           
-                          // 🔥 SOLO BOTÓN ATRÁS (Limpio)
                           leading: Column(
                             children: [
                               const SizedBox(height: 20),
                               FloatingActionButton(
                                 elevation: 0,
-                                backgroundColor: Colors.grey[200],
+                                backgroundColor: themeColor.withOpacity(0.1), // Botón atrás sutil
+                                foregroundColor: themeColor,
                                 tooltip: "Volver al inicio",
                                 onPressed: () => context.go('/'),
-                                child: const Icon(Icons.arrow_back, color: Colors.black87),
+                                child: const Icon(Icons.arrow_back),
                               ),
                               const SizedBox(height: 20),
                             ],
@@ -120,7 +170,13 @@ class EventShellScreen extends ConsumerWidget {
 
                           labelType: NavigationRailLabelType.all,
                           destinations: railDestinations,
+                          
+                          // TEMAS DE ICONOS
                           selectedIconTheme: IconThemeData(color: themeColor),
+                          unselectedIconTheme: IconThemeData(color: textColor.withOpacity(0.6)),
+                          selectedLabelTextStyle: TextStyle(color: themeColor, fontWeight: FontWeight.bold),
+                          unselectedLabelTextStyle: TextStyle(color: textColor.withOpacity(0.6)),
+                          
                           useIndicator: true,
                           indicatorColor: themeColor.withOpacity(0.2),
                           elevation: 1,
@@ -130,24 +186,23 @@ class EventShellScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  
                   const VerticalDivider(thickness: 1, width: 1),
-
-                  // --- CONTENIDO DEL EVENTO (Sin barras extra) ---
                   Expanded(child: navigationShell),
                 ],
               )
-            // MÓVIL
             : navigationShell,
 
         bottomNavigationBar: isDesktop
             ? null
             : NavigationBar(
+                backgroundColor: navColor, // <--- COLOR BARRA INFERIOR
                 selectedIndex: navigationShell.currentIndex,
-                indicatorColor: themeColor.withOpacity(0.3),
-                backgroundColor: themeColor.withOpacity(0.05),
-                onDestinationSelected: (index) => _onTap(context, navigationShell, index),
+                indicatorColor: themeColor.withOpacity(0.2), // Fondo del botón activo
+                
+                // Aquí usamos directamente la lista que ya creamos con colores
                 destinations: destinations,
+                
+                onDestinationSelected: (index) => _onTap(context, navigationShell, index),
               ),
       ),
     );

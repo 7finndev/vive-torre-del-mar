@@ -209,8 +209,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               )
                             : null,
                         validator: (item) {
-                          if (_selectedEstablishmentId == null && item == null)
+                          if (_selectedEstablishmentId == null && item == null) {
                             return "Requerido";
+                          }
                           return null;
                         },
                       );

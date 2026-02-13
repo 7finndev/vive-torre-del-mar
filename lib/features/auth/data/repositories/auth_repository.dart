@@ -93,7 +93,7 @@ class AuthRepository {
       }
 
       try{
-        final profileUpdates = {
+        final Map<String, dynamic> profileUpdates = {
           if(name != null) 'full_name' : name,
           if(phone != null) 'phone' : phone,
           if(updates.containsKey('avatar_url')) 'avatar_url' : updates['avatar_url'],

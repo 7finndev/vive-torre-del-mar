@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:torre_del_mar_app/core/local_storage/local_db_service.dart';
+import 'package:torre_del_mar_app/core/utils/analytics_service.dart';
 import 'package:torre_del_mar_app/core/widgets/web_container.dart'; // Usamos WebContainer
 import 'package:torre_del_mar_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:torre_del_mar_app/main.dart';
@@ -65,10 +67,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await Supabase.instance.client.auth.signInWithPassword(
+      final response = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
+      final user = response.user;
+      final userId = user?.id;
+
+      // ACTUALIZAR ANALYTICS (Vincular dispositivo con usuario)
+      // Esto rellenará el campo 'user_id'.
+      try{
+        //Necesitamos el servicio de base de datos local
+        final localDb = ref.read(localDbServiceProvider);
+        //Volvemos a registrar el dispositivo, ahora que Supabase tiene la sesión
+        await AnalyticsService.trackDeviceStart(localDb, forceUserId: userId);
+        print("📊 Analytics actualizado con User ID");
+      }catch(e){
+        print("⚠️ Error actualizando analytics post-login: $e");
+      }
+
       // El listener de authState se encargará de redirigir
       if (mounted) setState(() => _isLoading = false);
     } catch (e) {

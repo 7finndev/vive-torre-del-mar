@@ -22,4 +22,7 @@ class AppData {
       "url": "https://axarquiacostadelsol.es/",
     },
   ];
+
+  //Distancia máxima para validar el QR (en metros):
+  static const double maxQrDistance = 150.0;
 }

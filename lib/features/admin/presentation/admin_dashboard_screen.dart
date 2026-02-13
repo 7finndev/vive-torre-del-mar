@@ -181,20 +181,54 @@ class _SummaryTab extends StatelessWidget {
                     spacing: 16,
                     runSpacing: 16,
                     children: [
-                      // En PC ocupa la mitad o un tercio, en móvil todo el ancho
                       SizedBox(
                         width: constraints.maxWidth > 800 
-                            ? (constraints.maxWidth - 16) / 2 // Mitad del ancho en PC
-                            : constraints.maxWidth, // Todo el ancho en móvil
+                            ? (constraints.maxWidth - 16) / 2 
+                            : constraints.maxWidth,
                         child: _ActionCard(
                           icon: Icons.qr_code_scanner,
                           title: "Validar Ganadores",
                           subtitle: "Comprobar requisitos de sorteo",
                           color: Colors.purple,
-                          onTap: () => context.go('/admin/check-winner'),
+                          onTap: () {
+                            // 1. OBTENER EL EVENTO SELECCIONADO
+                            // Usamos ref.read porque estamos dentro de un callback
+                            // Nota: _SummaryTab necesita acceso a 'ref'. 
+                            // Como es un StatelessWidget simple, lo mejor es pasárselo 
+                            // o convertirlo a ConsumerWidget. 
+                            
+                            // OPCIÓN RÁPIDA: El widget padre (AdminDashboardScreen) ya tiene el 'selectedEvent'.
+                            // Como _SummaryTab recibe 'selectedEvent' en el constructor, lo usamos directo:
+                            
+                            if (selectedEvent == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("⚠️ Por favor, selecciona un evento específico arriba."),
+                                  backgroundColor: Colors.orange
+                                )
+                              );
+                              return;
+                            }
+
+                            // 2. VALIDAR ESTADO DEL EVENTO
+                            if (selectedEvent!.status == 'upcoming') {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text("⏳ Evento no iniciado"),
+                                  content: Text("El evento '${selectedEvent!.name}' aún no ha comenzado. No se pueden validar ganadores."),
+                                  actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Entendido"))],
+                                ),
+                              );
+                              return;
+                            }
+
+                            // 3. SI TODO OK, NAVEGAMOS
+                            // Pasamos el evento como 'extra' para que la pantalla sepa qué validar
+                            context.go('/admin/check-winner', extra: selectedEvent);
+                          },
                         ),
                       ),
-                      // Aquí podrías añadir más acciones en el futuro (ej: Crear Evento)
                     ],
                   );
                 }
@@ -319,13 +353,18 @@ class _ChartsTabState extends State<_ChartsTab> {
 // -----------------------------------------------------------
 // 📱 TAB 3: DISPOSITIVOS
 // -----------------------------------------------------------
+// -----------------------------------------------------------
+// 📱 TAB 3: DISPOSITIVOS (ACTUALIZADO)
+// -----------------------------------------------------------
 class _DevicesTab extends StatelessWidget {
   final DashboardStats stats;
   const _DevicesTab({required this.stats});
 
   @override
   Widget build(BuildContext context) {
-    final total = stats.deviceAndroid + stats.deviceIOS + stats.deviceWeb;
+    // Calculamos el total incluyendo Escritorio
+    final total = stats.deviceAndroid + stats.deviceIOS + stats.deviceWeb + stats.deviceDesktop;
+    
     if (total == 0) {
       return const Center(
         child: Column(
@@ -338,23 +377,63 @@ class _DevicesTab extends StatelessWidget {
         ),
       );
     }
+    
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 800),
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+          decoration: BoxDecoration(
+            color: Colors.white, 
+            borderRadius: BorderRadius.circular(16), 
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text("Tecnología de Usuarios", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text("Distribución por Sistema Operativo real", style: TextStyle(fontSize: 12, color: Colors.grey)),
               const SizedBox(height: 20),
-              _DeviceBar(label: "Android", count: stats.deviceAndroid, total: total, color: Colors.green, icon: Icons.android),
+              
+              // 1. ANDROID (Verde)
+              _DeviceBar(
+                label: "Android (Móvil/Tablet)", 
+                count: stats.deviceAndroid, 
+                total: total, 
+                color: const Color(0xFF3DDC84), 
+                icon: Icons.android
+              ),
               const SizedBox(height: 16),
-              _DeviceBar(label: "iOS (iPhone)", count: stats.deviceIOS, total: total, color: Colors.black, icon: Icons.apple),
+              
+              // 2. iOS (Negro/Gris)
+              _DeviceBar(
+                label: "iOS (iPhone/iPad)", 
+                count: stats.deviceIOS, 
+                total: total, 
+                color: Colors.black87, 
+                icon: Icons.apple
+              ),
               const SizedBox(height: 16),
-              _DeviceBar(label: "Web / Escritorio", count: stats.deviceWeb, total: total, color: Colors.blue, icon: Icons.web),
+
+              // 3. ESCRITORIO (Azul Índigo) -> ¡NUEVO!
+              _DeviceBar(
+                label: "Escritorio (Windows/Mac)", 
+                count: stats.deviceDesktop, 
+                total: total, 
+                color: Colors.indigo, 
+                icon: Icons.desktop_windows
+              ),
+              const SizedBox(height: 16),
+              
+              // 4. OTROS / WEB (Gris Azulado)
+              _DeviceBar(
+                label: "Otros / Web Genérico", 
+                count: stats.deviceWeb, 
+                total: total, 
+                color: Colors.blueGrey, 
+                icon: Icons.public
+              ),
             ],
           ),
         ),

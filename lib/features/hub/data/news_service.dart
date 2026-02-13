@@ -119,12 +119,10 @@ final newsProvider = FutureProvider<List<NewsItem>>((ref) async {
 
 
 // =============================================================================
-// 4. LÓGICA PRIVADA DE WORDPRESS (TU CÓDIGO ORIGINAL REFACTORIZADO)
+// 4. LÓGICA PRIVADA DE WORDPRESS 
 // =============================================================================
 Future<List<NewsItem>> _fetchWordPressNews(int limit) async {
   
-  // URL BASE (WordPress API)
-  // Usamos el límite dinámico, pero mínimo pedimos 3 para asegurar variedad
   final int fetchCount = limit < 3 ? 3 : limit; 
   final String baseUrl = 'https://www.torredelmar.org/wp-json/wp/v2/posts?per_page=$fetchCount&_embed';
   
@@ -132,27 +130,60 @@ Future<List<NewsItem>> _fetchWordPressNews(int limit) async {
   final String urlWithCache = '$baseUrl&t=$cacheBuster';
 
   Future<http.Response> fetchWithProxy(String proxyUrl) async {
-    return await http.get(Uri.parse(proxyUrl)).timeout(const Duration(seconds: 20));
+    return await http.get(Uri.parse(proxyUrl)).timeout(const Duration(seconds: 15));
   }
 
   http.Response? response;
     
-  // LÓGICA DE PROXY (WEB)
+  // LÓGICA DE PROXY (WEB) - ACTUALIZADA PARA PRODUCCIÓN
   if (kIsWeb) {
-    try {
-      final proxyA = 'https://api.allorigins.win/raw?url=${Uri.encodeComponent(urlWithCache)}';
-      response = await fetchWithProxy(proxyA);
-    } catch (e) {
-      print("⚠️ Fallo Proxy A, intentando B...");
-      final proxyB = 'https://corsproxy.io/?${Uri.encodeComponent(urlWithCache)}';
-      response = await fetchWithProxy(proxyB);
+    // Lista de proxies ordenados por fiabilidad actual en producción.
+    // allorigins get (no raw) suele fallar menos en producción porque devuelve JSON
+    // thingproxy y cors-anywhere de heroku son los backups más robustos.
+    final proxies = [
+      'https://api.allorigins.win/get?url=${Uri.encodeComponent(urlWithCache)}', // Proxy A (JSON envoltorio)
+      'https://thingproxy.freeboard.io/fetch/$urlWithCache',                     // Proxy B (Raw)
+      'https://cors-anywhere.herokuapp.com/$urlWithCache',                       // Proxy C (Raw)
+    ];
+
+    for (int i = 0; i < proxies.length; i++) {
+      try {
+        response = await fetchWithProxy(proxies[i]);
+        
+        // Verificamos si la respuesta fue exitosa
+        if (response.statusCode == 200) {
+          // Si usamos allorigins /get, los datos vienen envueltos en un campo 'contents'
+          if (i == 0) {
+            final jsonMap = json.decode(response.body);
+            // Reemplazamos el body con el contenido real para que el resto del código funcione igual
+            response = http.Response(jsonMap['contents'], 200); 
+          }
+          break; // ¡Éxito! Salimos del bucle
+        } else {
+           print("⚠️ Proxy ${i+1} devolvió código ${response.statusCode}. Intentando el siguiente...");
+        }
+      } catch (e) {
+        print("⚠️ Fallo Proxy ${i+1}: $e");
+        // Si es el último proxy y también falla, dejamos que el código siga
+        // (abajo capturará que response == null o statusCode != 200 y lanzará la excepción general)
+      }
     }
   } else {
-    // LÓGICA NATIVA (MÓVIL)
-    response = await http.get(Uri.parse(urlWithCache)).timeout(const Duration(seconds: 20));
+    // LÓGICA NATIVA (MÓVIL) - No necesita Proxy
+    try {
+      response = await http.get(Uri.parse(urlWithCache)).timeout(const Duration(seconds: 20));
+    } catch(e){
+      throw Exception("Error de red en móvil: $e");
+    }
   }
 
-  if (response.statusCode == 200) {
+  // Si después de todos los intentos no hay respuesta o no es 200, abortamos WordPress
+  if (response == null || response.statusCode != 200) {
+    throw Exception("Imposible obtener noticias de WordPress. Todos los métodos fallaron.");
+  }
+
+  // PROCESAMIENTO DE DATOS (Mantenemos tu lógica exacta)
+  try {
     final List<dynamic> data = json.decode(response.body);
     
     return data.map((jsonItem) {
@@ -202,8 +233,7 @@ Future<List<NewsItem>> _fetchWordPressNews(int limit) async {
         isInternal: false
       );
     }).toList();
-
-  } else {
-    throw Exception("Error WordPress: ${response.statusCode}");
+  } catch (e) {
+    throw Exception("Error procesando el JSON de WordPress: $e");
   }
 }
