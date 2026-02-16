@@ -159,7 +159,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("¿Estás seguro?"),
-        content: const Text("Se borrará el perfil de este usuario."),
+        content: const Text("Se borrará el perfil de este usuario, pero sus votos se mantendrán para no alterar el concurso."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Borrar", style: TextStyle(color: Colors.red))),
@@ -169,8 +169,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
     if (confirm == true) {
       try {
-        await Supabase.instance.client.from('profiles').delete().eq('id', id);
-        _loadAllUsers();
+        //Comentamo esta linea por nueva estrategia
+        //await Supabase.instance.client.from('profiles').delete().eq('id', id);
+        // Nueva Estrategia (SOFT DELETE):
+        await Supabase.instance.client.from('profiles').update({
+          'is_active': false, //Lo marcamos como inactivo
+          'deleted_at': DateTime.now().toIso8601String(), //Guardamos la fecha
+        }).eq('id', id);
+        await _loadAllUsers();
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Eliminado")));
       } catch (e) {
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -239,11 +245,23 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                           final bool isAdmin = role == 'admin';
                           final bool isManager = role == 'manager';
                           
-                          Color color = isAdmin ? Colors.green : (isManager ? Colors.blue : Colors.grey);
-                          IconData icon = isAdmin ? Icons.admin_panel_settings : (isManager ? Icons.manage_accounts : Icons.person);
+                          // Comprobar si está activo (por defecto True si es null)
+                          final bool isActive = user['is_active'] ?? true;
 
+                          //Color color = isAdmin ? Colors.green : (isManager ? Colors.blue : Colors.grey);
+                          //IconData icon = isAdmin ? Icons.admin_panel_settings : (isManager ? Icons.manage_accounts : Icons.person);
+
+                          //Si esta inactivo, todo gris. Si no, colores normales.
+                          Color color = !isActive
+                            ? Colors.grey
+                            : (isAdmin ? Colors.green : (isManager ? Colors.blue : Colors.grey));
+
+                          IconData icon = !isActive
+                            ? Icons.block //Icono de bloqueado
+                            : (isAdmin ? Icons.admin_panel_settings : (isManager ? Icons.manage_accounts : Icons.person));
                           return Card(
-                            elevation: 2,
+                            elevation: isActive ? 2 : 0,
+                            color: isActive ? Colors.white : Colors.grey[100],
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                               side: BorderSide(color: isAdmin || isManager ? color : Colors.transparent, width: 1.5)

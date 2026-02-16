@@ -445,6 +445,31 @@ class _EstablishmentDetailScreenState extends ConsumerState<EstablishmentDetailS
   }
 */
   Widget _buildScanButton(ProductModel? product, AsyncValue productsAsync, bool hasStamp, String eventStatus, int currentEventId) {
+    // BLOQUEO SI EL ESTABLECIMIENTO ESTÁ INACTIVO 🔥
+    if (!widget.establishment.isActive) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          children: const [
+            Icon(Icons.lock_clock, color: Colors.grey, size: 30),
+            SizedBox(height: 8),
+            Text(
+              "ESTABLECIMIENTO NO DISPONIBLE",
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+            ),
+            Text(
+              "No se pueden realizar votaciones actualmente.",
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
     String label = "ESCANEAR CÓDIGO";
     IconData icon = Icons.qr_code_scanner;
     Color btnColor = Colors.orange;

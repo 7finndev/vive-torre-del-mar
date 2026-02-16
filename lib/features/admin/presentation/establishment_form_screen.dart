@@ -51,7 +51,7 @@ class _EstablishmentFormScreenState
 
   // PIN
   final _pinController = TextEditingController();
-  
+
   bool _isPartner = true;
   bool _isActive = true;
   bool _useImageUpload = true;
@@ -69,7 +69,7 @@ class _EstablishmentFormScreenState
       _phoneController.text = e.phone ?? ''; // Público
       _scheduleController.text = e.schedule ?? '';
       _imageController.text = e.coverImage ?? '';
-      
+
       // Gerencia
       _ownerController.text = e.ownerName ?? '';
       _ownerPhoneController.text = e.ownerPhone ?? ''; // Privado
@@ -114,13 +114,16 @@ class _EstablishmentFormScreenState
 
   Future<void> _findCoordinates() async {
     if (_addressController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Escribe una dirección primero")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Escribe una dirección primero")),
+      );
       return;
     }
     setState(() => _isGeocoding = true);
 
     String query = _addressController.text.trim();
-    if(!query.toLowerCase().contains("málaga") && !query.toLowerCase().contains("españa")) {
+    if (!query.toLowerCase().contains("málaga") &&
+        !query.toLowerCase().contains("españa")) {
       query = "$query, Málaga, España";
     }
 
@@ -134,9 +137,16 @@ class _EstablishmentFormScreenState
         _latController.text = lat.toString();
         _lngController.text = lng.toString();
         _mapController.move(LatLng(lat, lng), 17.0);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("📍 Ubicación encontrada"), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("📍 Ubicación encontrada"),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ No encontrada.")));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("⚠️ No encontrada.")));
       }
     }
   }
@@ -167,7 +177,10 @@ class _EstablishmentFormScreenState
         labelText: label,
         prefixIcon: Icon(icon, color: Colors.grey),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -176,7 +189,9 @@ class _EstablishmentFormScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.establishmentToEdit != null ? "Editar Socio" : "Nuevo Socio"),
+        title: Text(
+          widget.establishmentToEdit != null ? "Editar Socio" : "Nuevo Socio",
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -186,26 +201,43 @@ class _EstablishmentFormScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // --- DATOS BÁSICOS ---
-              const Text("🏢 Datos del Establecimiento", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text(
+                "🏢 Datos del Establecimiento",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
               const SizedBox(height: 15),
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: "Nombre Comercial *", border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: "Nombre Comercial *",
+                  border: OutlineInputBorder(),
+                ),
                 validator: (v) => v!.isEmpty ? 'Requerido' : null,
               ),
               const SizedBox(height: 15),
-              _buildTextField(controller: _phoneController, label: "Teléfono Público (Reservas)", icon: Icons.phone, type: TextInputType.phone),
+              _buildTextField(
+                controller: _phoneController,
+                label: "Teléfono Público (Reservas)",
+                icon: Icons.phone,
+                type: TextInputType.phone,
+              ),
               const SizedBox(height: 15),
               TextFormField(
                 controller: _descController,
-                decoration: const InputDecoration(labelText: "Descripción", border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: "Descripción",
+                  border: OutlineInputBorder(),
+                ),
                 maxLines: 3,
               ),
 
               const SizedBox(height: 25),
-              
+
               // --- DIRECCIÓN Y MAPA ---
-              const Text("📍 Ubicación", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text(
+                "📍 Ubicación",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
               const SizedBox(height: 15),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,7 +246,11 @@ class _EstablishmentFormScreenState
                     flex: 2,
                     child: TextFormField(
                       controller: _addressController,
-                      decoration: const InputDecoration(labelText: "Dirección", border: OutlineInputBorder(), prefixIcon: Icon(Icons.location_on)),
+                      decoration: const InputDecoration(
+                        labelText: "Dirección",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.location_on),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -224,10 +260,25 @@ class _EstablishmentFormScreenState
                       height: 56,
                       child: ElevatedButton(
                         onPressed: _isGeocoding ? null : _findCoordinates,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade50, padding: EdgeInsets.zero),
-                        child: _isGeocoding 
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                          : const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.search), Text("GPS", style: TextStyle(fontSize: 10))]),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade50,
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: _isGeocoding
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.search),
+                                  Text("GPS", style: TextStyle(fontSize: 10)),
+                                ],
+                              ),
                       ),
                     ),
                   ),
@@ -236,40 +287,98 @@ class _EstablishmentFormScreenState
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(child: _buildTextField(controller: _latController, label: "Latitud", icon: Icons.north, type: TextInputType.number)),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _latController,
+                      label: "Latitud",
+                      icon: Icons.north,
+                      type: TextInputType.number,
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildTextField(controller: _lngController, label: "Longitud", icon: Icons.east, type: TextInputType.number)),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _lngController,
+                      label: "Longitud",
+                      icon: Icons.east,
+                      type: TextInputType.number,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
               Container(
-                height: 250,
-                decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(10)),
+                height: 300,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      initialCenter: _latController.text.isNotEmpty 
-                          ? LatLng(double.parse(_latController.text), double.parse(_lngController.text))
-                          : const LatLng(36.741, -4.093), 
+                      initialCenter: _latController.text.isNotEmpty
+                          ? LatLng(
+                              double.parse(_latController.text),
+                              double.parse(_lngController.text),
+                            )
+                          : const LatLng(36.741, -4.093),
                       initialZoom: 15.0,
-                      onTap: (_, point) {
+                      // Al toca, buscamos la calle
+                      onTap: (tapPosition, point) async {
+                        //.-Actualizamos visualmente las coordenadas
                         setState(() {
                           _latController.text = point.latitude.toStringAsFixed(6);
                           _lngController.text = point.longitude.toStringAsFixed(6);
+                          _isGeocoding = true; //Spinner del botón
                         });
+                        //.-Pedimos la dirección al servidor
+                        final foundAddress = await GeocodingHelper.getAddressFromCoordinates(
+                          point.latitude, 
+                          point.longitude
+                        );
+                        //.-Si encontramos dirección, actualizamos la caja del texto
+                        if(mounted){
+                          setState(() {
+                            _isGeocoding = false; //Quitamos spinner
+                            if(foundAddress != null && foundAddress.isNotEmpty) {
+                              _addressController.text = foundAddress;
+
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("📍 Dirección detectada: $foundAddress"),
+                                  duration: const Duration(milliseconds: 1500),
+                                  behavior: SnackBarBehavior.floating,
+                                )
+                              );
+                            }
+                          });
+                        }
                       },
                     ),
                     children: [
-                      TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.torredelmar.admin'),
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.torredelmar.admin',
+                      ),
                       MarkerLayer(
                         markers: [
                           if (_latController.text.isNotEmpty)
                             Marker(
-                              point: LatLng(double.tryParse(_latController.text) ?? 0, double.tryParse(_lngController.text) ?? 0),
-                              width: 40, height: 40,
-                              child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                              point: LatLng(
+                                double.tryParse(_latController.text) ?? 0,
+                                double.tryParse(_lngController.text) ?? 0,
+                              ),
+                              width: 40,
+                              height: 40,
+                              child: const Icon(
+                                Icons.location_on,
+                                color: Colors.red,
+                                size: 40,
+                              ),
                             ),
                         ],
                       ),
@@ -281,32 +390,76 @@ class _EstablishmentFormScreenState
               const SizedBox(height: 30),
 
               // --- REDES SOCIALES ---
-              const Text("🌍 Redes Sociales", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text(
+                "🌍 Redes Sociales",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
               const SizedBox(height: 15),
-              _buildTextField(controller: _webCtrl, label: "Web Oficial", icon: Icons.language),
+              _buildTextField(
+                controller: _webCtrl,
+                label: "Web Oficial",
+                icon: Icons.language,
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(child: _buildTextField(controller: _facebookCtrl, label: "Facebook", icon: Icons.facebook)),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _facebookCtrl,
+                      label: "Facebook",
+                      icon: Icons.facebook,
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildTextField(controller: _instagramCtrl, label: "Instagram", icon: Icons.camera_alt)),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _instagramCtrl,
+                      label: "Instagram",
+                      icon: Icons.camera_alt,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
-              _buildTextField(controller: _tiktokCtrl, label: "TikTok (URL)", icon: Icons.music_note),
+              _buildTextField(
+                controller: _tiktokCtrl,
+                label: "TikTok (URL)",
+                icon: Icons.music_note,
+              ),
 
               const SizedBox(height: 30),
 
               // --- DATOS GERENCIA ---
-              const Text("👨‍💼 Datos Privados (Gerencia)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text(
+                "👨‍💼 Datos Privados (Gerencia)",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
               const SizedBox(height: 15),
-              _buildTextField(controller: _ownerController, label: "Nombre Gerente", icon: Icons.person),
+              _buildTextField(
+                controller: _ownerController,
+                label: "Nombre Gerente",
+                icon: Icons.person,
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(child: _buildTextField(controller: _ownerPhoneController, label: "Móvil Gerente", icon: Icons.phone_iphone, type: TextInputType.phone)),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _ownerPhoneController,
+                      label: "Móvil Gerente",
+                      icon: Icons.phone_iphone,
+                      type: TextInputType.phone,
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildTextField(controller: _ownerEmailController, label: "Email Gerente", icon: Icons.email, type: TextInputType.emailAddress)),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _ownerEmailController,
+                      label: "Email Gerente",
+                      icon: Icons.email,
+                      type: TextInputType.emailAddress,
+                    ),
+                  ),
                 ],
               ),
 
@@ -315,11 +468,21 @@ class _EstablishmentFormScreenState
               // --- SEGURIDAD (PIN) ---
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("🛡️ Seguridad (PIN Camarero)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                    const Text(
+                      "🛡️ Seguridad (PIN Camarero)",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepOrange,
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     Row(
                       children: [
@@ -335,17 +498,32 @@ class _EstablishmentFormScreenState
                               border: const OutlineInputBorder(),
                               counterText: "",
                               suffixIcon: IconButton(
-                                icon: const Icon(Icons.refresh, color: Colors.orange),
+                                icon: const Icon(
+                                  Icons.refresh,
+                                  color: Colors.orange,
+                                ),
                                 onPressed: () {
-                                  final randomPin = (1000 + DateTime.now().millisecondsSinceEpoch % 9000).toString();
-                                  setState(() => _pinController.text = randomPin);
+                                  final randomPin =
+                                      (1000 +
+                                              DateTime.now()
+                                                      .millisecondsSinceEpoch %
+                                                  9000)
+                                          .toString();
+                                  setState(
+                                    () => _pinController.text = randomPin,
+                                  );
                                 },
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 15),
-                        const Expanded(child: Text("Código manual para validar votos cuando falla el GPS.", style: TextStyle(fontSize: 12))),
+                        const Expanded(
+                          child: Text(
+                            "Código manual para validar votos cuando falla el GPS.",
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -354,31 +532,127 @@ class _EstablishmentFormScreenState
 
               const SizedBox(height: 30),
 
+              // --- ESTADO Y SOCIO ---
+              const Text(
+                "⚙️ Estado y Configuración",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    //1.-Switch: Socio ACET
+                    SwitchListTile(
+                      title: const Text(
+                        "Socio ACET",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: const Text(
+                        "Indica si el establecimiento es miembro de la asocición.",
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      value: _isPartner,
+                      activeColor: Colors.blue,
+                      secondary: const Icon(Icons.verified_user, color: Colors.blue),
+                      onChanged: (val) => setState(() => _isPartner = val),
+                    ),
+                    
+                    const Divider(height: 1),
+
+                    //2.-Switch: Acivo en el evento.
+                    SwitchListTile(
+                      title: const Text(
+                        "Activo / Disponible",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+
+                      ),
+                      subtitle: const Text(
+                        "Desmarca esta casilla si el local cierra por vacaciones o deja de participar. Desaparecerá del mapa y no se podrá escanear.",
+                        style: TextStyle(fontSize: 12),
+
+                      ),
+                      value: _isActive,
+                      activeColor: Colors.green,
+                      secondary: Icon(
+                        Icons.store,
+                        color: _isActive ? Colors.green : Colors.grey
+                      ),
+                      onChanged: (val) => setState(() => _isActive = val),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+              
               // --- IMAGEN ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Foto de Portada', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Switch(value: _useImageUpload, onChanged: (v) => setState(() => _useImageUpload = v)),
+                  const Text(
+                    'Foto de Portada',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Switch(
+                    value: _useImageUpload,
+                    onChanged: (v) => setState(() => _useImageUpload = v),
+                  ),
                 ],
               ),
               if (_useImageUpload)
                 Column(
                   children: [
                     Container(
-                      height: 200, width: double.infinity,
-                      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10)),
+                      height: 200,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       child: _selectedImageBytes != null
-                          ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(_selectedImageBytes!, fit: BoxFit.cover))
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.memory(
+                                _selectedImageBytes!,
+                                fit: BoxFit.cover,
+                              ),
+                            )
                           : (_imageController.text.isNotEmpty
-                                ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(_imageController.text, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.broken_image)))
-                                : const Icon(Icons.add_a_photo, size: 50, color: Colors.grey)),
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Image.network(
+                                      _imageController.text,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Icon(Icons.broken_image),
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.add_a_photo,
+                                    size: 50,
+                                    color: Colors.grey,
+                                  )),
                     ),
-                    TextButton.icon(onPressed: _pickImage, icon: const Icon(Icons.image), label: const Text("Seleccionar Imagen")),
+                    TextButton.icon(
+                      onPressed: _pickImage,
+                      icon: const Icon(Icons.image),
+                      label: const Text("Seleccionar Imagen"),
+                    ),
                   ],
                 )
               else
-                TextFormField(controller: _imageController, decoration: const InputDecoration(labelText: "URL Manual", border: OutlineInputBorder())),
+                TextFormField(
+                  controller: _imageController,
+                  decoration: const InputDecoration(
+                    labelText: "URL Manual",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
 
               const SizedBox(height: 40),
 
@@ -390,7 +664,10 @@ class _EstablishmentFormScreenState
                   onPressed: _isLoading ? null : _save,
                   icon: const Icon(Icons.save),
                   label: Text(_isLoading ? "GUARDANDO..." : "GUARDAR DATOS"),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ),
               const SizedBox(height: 50),
@@ -407,20 +684,30 @@ class _EstablishmentFormScreenState
 
     try {
       final repo = ref.read(establishmentRepositoryProvider);
-      String? finalImageUrl = _imageController.text.isNotEmpty ? _imageController.text : null;
+      String? finalImageUrl = _imageController.text.isNotEmpty
+          ? _imageController.text
+          : null;
 
       if (_useImageUpload && _selectedImageBytes != null) {
-        if(widget.establishmentToEdit != null && widget.establishmentToEdit!.coverImage != null){
-          await repo.deleteEstablishmentImage(widget.establishmentToEdit!.coverImage!);
+        if (widget.establishmentToEdit != null &&
+            widget.establishmentToEdit!.coverImage != null) {
+          await repo.deleteEstablishmentImage(
+            widget.establishmentToEdit!.coverImage!,
+          );
         }
         final fileName = '${const Uuid().v4()}.jpg';
-        finalImageUrl = await repo.uploadEstablishmentImage(fileName, _selectedImageBytes!);
+        finalImageUrl = await repo.uploadEstablishmentImage(
+          fileName,
+          _selectedImageBytes!,
+        );
       }
 
       double? lat;
       double? lng;
-      if (_latController.text.isNotEmpty) lat = double.tryParse(_latController.text.replaceAll(',', '.'));
-      if (_lngController.text.isNotEmpty) lng = double.tryParse(_lngController.text.replaceAll(',', '.'));
+      if (_latController.text.isNotEmpty)
+        lat = double.tryParse(_latController.text.replaceAll(',', '.'));
+      if (_lngController.text.isNotEmpty)
+        lng = double.tryParse(_lngController.text.replaceAll(',', '.'));
 
       final establishment = EstablishmentModel(
         id: widget.establishmentToEdit?.id ?? 0,
@@ -443,7 +730,9 @@ class _EstablishmentFormScreenState
         facebook: _facebookCtrl.text,
         instagram: _instagramCtrl.text,
         socialTiktok: _tiktokCtrl.text,
-        waiterPin: _pinController.text.trim().isEmpty ? null : _pinController.text.trim(),
+        waiterPin: _pinController.text.trim().isEmpty
+            ? null
+            : _pinController.text.trim(),
       );
 
       if (widget.establishmentToEdit == null) {
@@ -454,10 +743,15 @@ class _EstablishmentFormScreenState
 
       if (mounted) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Guardado correctamente")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Guardado correctamente")),
+        );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

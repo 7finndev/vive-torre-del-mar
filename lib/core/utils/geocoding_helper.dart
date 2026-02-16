@@ -31,4 +31,37 @@ class GeocodingHelper {
     }
     return null;
   }
+// NUEVA FUNCIÓN: Obtener dirección desde coordenadas (Reverse Geocoding)
+  static Future<String?> getAddressFromCoordinates(double lat, double lng) async {
+    try {
+      final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1');
+      
+      final response = await http.get(url, headers: {
+        'User-Agent': 'TorreDelMarApp/1.1.3 (es.sietefinn.appvivetorredelmar)',
+      });
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        final address = data['address'];
+        if (address != null) {
+          // Intentamos construir una dirección legible
+          // OpenStreetMap devuelve las partes por separado (calle, número, barrio...)
+          String road = address['road'] ?? address['pedestrian'] ?? address['footway'] ?? '';
+          String number = address['house_number'] ?? '';
+          
+          if (road.isEmpty) return null; // Si no hay calle, no devolvemos nada raro
+
+          String result = road;
+          if (number.isNotEmpty) result += ", $number";
+          
+          return result;
+        }
+      }
+    } catch (e) {
+      print("Error Reverse Geocoding: $e");
+    }
+    return null;
+  }
 }

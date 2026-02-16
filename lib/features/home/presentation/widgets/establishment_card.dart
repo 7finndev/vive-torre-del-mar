@@ -10,36 +10,48 @@ class EstablishmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 1. DETECTAR SI ESTÁ CERRADO
+    final bool isClosed = !establishment.isActive;
+
     return GestureDetector(
       onTap: () => context.push('/detail', extra: establishment),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isClosed ? Colors.grey[100] : Colors.white, // Fondo más oscuro si cerrado
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            )
-          ],
+          boxShadow: isClosed 
+              ? [] // Sin sombra si cerrado (efecto plano)
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
         ),
-        clipBehavior: Clip.antiAlias, // Recorta la imagen para que respete el borde redondo
+        clipBehavior: Clip.antiAlias,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch, // Estira los hijos a la altura disponible (130px)
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             
-            // 1. IMAGEN (IZQUIERDA) - Ancho fijo
+            // 1. IMAGEN (IZQUIERDA)
             SizedBox(
-              width: 130, // Cuadrado perfecto (130x130) o rectangular vertical
+              width: 130,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  SmartImageContainer(
-                    imageUrl: establishment.coverImage,
-                    borderRadius: 0, // El borde lo da el Container padre
+                  // IMAGEN CON FILTRO B/N SI ESTÁ CERRADO
+                  ColorFiltered(
+                    colorFilter: isClosed
+                        ? const ColorFilter.mode(Colors.grey, BlendMode.saturation)
+                        : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
+                    child: SmartImageContainer(
+                      imageUrl: establishment.coverImage,
+                      borderRadius: 0,
+                    ),
                   ),
-                  // Sombra interior sutil para separar imagen de contenido blanco
+                  
+                  // SOMBRA INTERIOR
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -48,37 +60,55 @@ class EstablishmentCard extends StatelessWidget {
                         colors: [Colors.black.withOpacity(0.1), Colors.transparent],
                       ),
                     ),
-                  )
+                  ),
+
+                  // ETIQUETA "CERRADO" SOBRE LA FOTO
+                  if (isClosed)
+                    Container(
+                      color: Colors.black.withOpacity(0.6),
+                      child: const Center(
+                        child: Text(
+                          "CERRADO\nTEMPORALMENTE",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white, 
+                            fontWeight: FontWeight.bold, 
+                            fontSize: 10
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
 
-            // 2. INFORMACIÓN (DERECHA) - Ocupa el resto
+            // 2. INFORMACIÓN (DERECHA)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center, // Centrado verticalmente
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // A. TÍTULO
                     Text(
                       establishment.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         height: 1.2,
+                        color: isClosed ? Colors.grey : Colors.black, // Texto gris si cerrado
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     
-                    const SizedBox(height: 6), // Separación
+                    const SizedBox(height: 6),
 
                     // B. UBICACIÓN
                     Row(
                       children: [
-                        Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
+                        Icon(Icons.location_on, size: 14, color: isClosed ? Colors.grey : Colors.grey[500]),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
@@ -91,18 +121,18 @@ class EstablishmentCard extends StatelessWidget {
                       ],
                     ),
 
-                    const Spacer(), // Empuja lo siguiente abajo del todo
+                    const Spacer(),
 
                     // C. HORARIO / ESTADO
                     Row(
                       children: [
-                        const Icon(Icons.access_time, size: 14, color: Colors.blue),
+                        Icon(Icons.access_time, size: 14, color: isClosed ? Colors.grey : Colors.blue),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            establishment.schedule ?? "Consultar horario",
-                            style: const TextStyle(
-                              color: Colors.blue,
+                            isClosed ? "No disponible" : (establishment.schedule ?? "Consultar horario"),
+                            style: TextStyle(
+                              color: isClosed ? Colors.grey : Colors.blue,
                               fontSize: 11,
                               fontWeight: FontWeight.w500
                             ),
@@ -116,29 +146,6 @@ class EstablishmentCard extends StatelessWidget {
                 ),
               ),
             ),
-
-            // 3. BADGE TAPAS (Etiqueta opcional a la derecha)
-            if (establishment.products?.isNotEmpty ?? false)
-              Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(8)),
-                    ),
-                    child: Text(
-                      "${establishment.products!.length}",
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange.shade800
-                      ),
-                    ),
-                  ),
-                ],
-              )
           ],
         ),
       ),
